@@ -1,0 +1,22 @@
+{
+  "name": "potsbox",
+  "version": "0.1.0",
+  "description": "operator, can you help me make this call",
+  "private": false,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  }
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "mic": "^2.1.2",
+    "node-fetch": "^3.3.2",
+    "openai": "^6.15.0",
+    "speaker": "^0.5.5",
+    "wav": "^1.0.2",
+    "ws": "^8.18.3"
+  }
+}
