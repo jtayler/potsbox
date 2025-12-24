@@ -6,11 +6,10 @@
   "type": "commonjs",
   "scripts": {
     "start": "node index.js"
-  }
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "mic": "^2.1.2",
     "node-fetch": "^3.3.2",
