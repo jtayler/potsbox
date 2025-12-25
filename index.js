@@ -48,9 +48,16 @@ function buildContext() {
 // CROSSBAR (latency masking)
 // =====================================================
 function startCrossbar() {
-  const child = spawn("afplay", [CROSSBAR_FILE], { stdio: "ignore" });
+  let child;
+
+  enqueueAudio(async () => {
+    child = spawn("afplay", [CROSSBAR_FILE], { stdio: "ignore" });
+  });
+
   return () => {
-    try { child.kill("SIGKILL"); } catch {}
+    enqueueAudio(async () => {
+      try { child && child.kill("SIGKILL"); } catch {}
+    });
   };
 }
 
@@ -207,13 +214,14 @@ async function tellJoke(openai) {
 (async function run() {
   log("CALL START:", call.id);
 
+    const stopCrossbar = startCrossbar();
+
   while (true) {
     if (!call.greeted) {
       await speak("Operator. How may I help you?");
       call.greeted = true;
     }
 
-    //const stopCrossbar = startCrossbar();
 
     await recordOnce();
 
@@ -242,8 +250,8 @@ async function tellJoke(openai) {
     if (intent.action === "SERVICE_TIME" && intent.confidence > 0.6) {
       const t = getTime();
       await speak(`The time is ${t}.`);
-      addTurn(heardRaw, `Time given: ${t}`);
-      continue;
+  await speak("Goodbye.");
+  process.exit(0);
     }
 
 if (intent.action === "SERVICE_JOKE" && intent.confidence > 0.6) {
