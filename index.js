@@ -1,6 +1,8 @@
 // potsbox index.js — Operator + Intent Routing (Conservative, Stable)
 // CommonJS — paste and run
 
+const WebSocket = require("ws");
+
 const fs = require("fs");
 const mic = require("mic");
 const OpenAI = require("openai");
@@ -297,6 +299,64 @@ async function tellJoke(openai) {
   return (r.output_text || "").trim();
 }
 
+async function streamTranscribe() {
+  // Record a short utterance into memory (no files), stop on silence
+  const wavBuffer = await new Promise((resolve) => {
+    const chunks = [];
+
+    const micInstance = mic({
+      rate: "16000",
+      channels: "1",
+      // IMPORTANT: mic expects integer seconds here; 0 disables silence stop.
+      exitOnSilence: 8,
+      fileType: "wav"
+    });
+
+    const micStream = micInstance.getAudioStream();
+
+    const hardStop = setTimeout(() => {
+      try { micInstance.stop(); } catch {}
+    }, 6000);
+
+    micStream.on("data", (d) => chunks.push(d));
+
+    // Works on many setups; if it doesn't, the hardStop still ends it.
+    micStream.on("silence", () => {
+      try { micInstance.stop(); } catch {}
+    });
+
+    micStream.on("error", () => {
+      clearTimeout(hardStop);
+      resolve(Buffer.alloc(0));
+    });
+
+    micStream.on("stopComplete", () => {
+      clearTimeout(hardStop);
+      resolve(Buffer.concat(chunks));
+    });
+
+    // Fallback: some installs don't emit stopComplete reliably
+    micStream.on("close", () => {
+      clearTimeout(hardStop);
+      resolve(Buffer.concat(chunks));
+    });
+
+    micInstance.start();
+  });
+
+  if (!wavBuffer || wavBuffer.length === 0) return "";
+
+  // Node 20 has File built-in; OpenAI SDK accepts File
+  const file = new File([wavBuffer], "input.wav", { type: "audio/wav" });
+
+  const stt = await openai.audio.transcriptions.create({
+    file,
+    model: "gpt-4o-transcribe"
+  });
+
+  return (stt.text || "").trim();
+}
+
 // =====================================================
 // MAIN LOOP
 // =====================================================
@@ -312,14 +372,7 @@ async function tellJoke(openai) {
     }
 
 
-    await recordOnce();
-
-    const stt = await openai.audio.transcriptions.create({
-      file: fs.createReadStream("input.wav"),
-      model: "gpt-4o-transcribe"
-    });
-
-    const heardRaw = (stt.text || "").trim();
+const heardRaw = await streamTranscribe();
     log("HEARD:", heardRaw);
 
     if (!heardRaw) {
