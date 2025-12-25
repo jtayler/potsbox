@@ -91,7 +91,7 @@ function recordOnce({ outFile = "input.wav", maxMs = 6000 } = {}) {
 // =====================================================
 // AUDIO: TTS (WAV only)
 // =====================================================
-async function speak(text) {
+async function speak(text, voice = VOICES.operator) {
   const s = (text || "").trim();
   if (!s) return;
 
@@ -100,7 +100,7 @@ async function speak(text) {
   return enqueueAudio(async () => {
     const speech = await openai.audio.speech.create({
       model: "gpt-4o-mini-tts",
-      voice: VOICES.operator,
+      voice,                 // ← fixed
       input: s,
       format: "wav"
     });
