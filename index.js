@@ -69,7 +69,7 @@ function recordOnce({ outFile = "input.wav", maxMs = 6000 } = {}) {
     const micInstance = mic({
       rate: "16000",
       channels: "1",
-      exitOnSilence: 2,
+      exitOnSilence: 0.2,
       fileType: "wav"
     });
 
