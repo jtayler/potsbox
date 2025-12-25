@@ -88,15 +88,17 @@ async function speak(text) {
 
   log("TTS:", s);
 
-  const speech = await openai.audio.speech.create({
-    model: "gpt-4o-mini-tts",
-    voice: VOICES.operator,
-    input: s,
-    format: "wav"
-  });
+  return enqueueAudio(async () => {
+    const speech = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: VOICES.operator,
+      input: s,
+      format: "wav"
+    });
 
-  fs.writeFileSync("out.wav", Buffer.from(await speech.arrayBuffer()));
-  await new Promise(r => exec("afplay out.wav", r));
+    fs.writeFileSync("out.wav", Buffer.from(await speech.arrayBuffer()));
+    await new Promise(r => exec("afplay out.wav", r));
+  });
 }
 
 // =====================================================
@@ -166,6 +168,13 @@ async function operatorChat(heardRaw) {
   }
 }
 
+let audioQueue = Promise.resolve();
+
+function enqueueAudio(fn) {
+  audioQueue = audioQueue.then(fn).catch(() => {});
+  return audioQueue;
+}
+
 // =====================================================
 // SERVICES
 // =====================================================
@@ -189,6 +198,8 @@ function getTime() {
       await speak("Operator. How may I help you?");
       call.greeted = true;
     }
+
+    const stopCrossbar = startCrossbar();
 
     await recordOnce();
 
