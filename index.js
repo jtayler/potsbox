@@ -449,7 +449,7 @@ if (intent.action === "SERVICE_JOKE" && intent.confidence > 0.6) {
     await speak(joke);
   }
 
-  await speak("Catch you later alligator.");
+  await speak("Catch ya later alligator.");
   process.exit(0);
 }
 
