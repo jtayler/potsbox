@@ -187,6 +187,20 @@ function getTime() {
   }).format(new Date());
 }
 
+async function tellJoke(openai) {
+  const r = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    input: [
+      {
+        role: "system",
+        content:
+          "You are a Dial-a-Joke line. Tell ONE short raw and funny joke like Richard Pryor and stop."
+      }
+    ]
+  });
+  return (r.output_text || "").trim();
+}
+
 // =====================================================
 // MAIN LOOP
 // =====================================================
@@ -199,7 +213,7 @@ function getTime() {
       call.greeted = true;
     }
 
-    const stopCrossbar = startCrossbar();
+    //const stopCrossbar = startCrossbar();
 
     await recordOnce();
 
@@ -231,6 +245,17 @@ function getTime() {
       addTurn(heardRaw, `Time given: ${t}`);
       continue;
     }
+
+if (intent.action === "SERVICE_JOKE" && intent.confidence > 0.6) {
+  const joke = await tellJoke(openai);
+
+  if (joke) {
+    await speak(joke);
+  }
+
+  await speak("Goodbye.");
+  process.exit(0);
+}
 
     // Everything else → operator
     await operatorChat(heardRaw);
