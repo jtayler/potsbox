@@ -124,11 +124,16 @@ async function routeIntentMasked(heardRaw) {
           content:
             "You are a telephone exchange controller.\n" +
             "Decide the caller's intent.\n\n" +
-            "Actions:\n" +
-            "- SERVICE_TIME\n" +
-            "- SERVICE_WEATHER\n" +
-            "- SERVICE_JOKE\n" +
-            "- OPERATOR_CHAT\n\n" +
+"Actions:\n" +
+"- SERVICE_TIME\n" +
+"- SERVICE_WEATHER\n" +
+"- SERVICE_JOKE\n" +
+"- SERVICE_PRAYER\n" +
+"- SERVICE_HOROSCOPE\n" +
+"- SERVICE_SCIENCE\n" +
+"- SERVICE_STORY\n" +
+"- SERVICE_DIRECTORY\n" +
+"- OPERATOR_CHAT\n\n" +
             "Return JSON only:\n" +
             "{ \"action\": string, \"confidence\": number }"
         },
@@ -194,6 +199,90 @@ function getTime() {
   }).format(new Date());
 }
 
+async function tellPrayer(openai) {
+  const r = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    input: [
+      {
+        role: "system",
+        content:
+          "You are Dial-a-Prayer. Offer ONE short, sharp and humorous, atheist prayer " +
+          "It is part of the Flying Spaghetti Monster, you know the religion. End by ripping religion."
+      }
+    ]
+  });
+  return (r.output_text || "").trim();
+}
+
+async function tellHoroscope(openai) {
+  const r = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    input: [
+      {
+        role: "system",
+        content:
+          "You are Horoscopes-by-Phone. Deliver ONE short, Richard Pryor style horoscope. " +
+          "Do not ask for birth details. Keep it shocking funny and short."
+      }
+    ]
+  });
+  return (r.output_text || "").trim();
+}
+
+async function answerScience(openai, question, context) {
+  const r = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    input: [
+      {
+        role: "system",
+        content:
+          "You are the Science Line on a public telephone exchange. " +
+          "Answer clearly and calmly. Like Neil Jim Al Khalili One idea about rocks, the early earth or the universe extra points for esoteric or oddly interesting cutting edge things you want to know about at a party why is the sky blue to why do electrons stop being random when you observe them? 2–3 sentences max simple question form. Challenge the listener to respond then talk about it."
+      },
+      {
+        role: "user",
+        content:
+          `Conversation so far:\n${context}\n\nCaller asks:\n${question}`
+      }
+    ]
+  });
+  return (r.output_text || "").trim();
+}
+
+async function tellStory(openai) {
+  const r = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    input: [
+      {
+        role: "system",
+        content:
+          "You are Story Line. Tell ONE short children's story " +
+          "about the Fearless Flying Taylers — Jesse, Paraskevi, Ellison, and Remy — " +
+          "a group of siblings aged 6–13 in New York City who are entertainers and detectives. " +
+          "Warm, adventurous, playful. 30–45 seconds. Then stop."
+      }
+    ]
+  });
+  return (r.output_text || "").trim();
+}
+
+async function directoryResponse(openai, request) {
+  const r = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    input: [
+      {
+        role: "system",
+        content:
+          "You are a 1970s telephone directory operator. " +
+          "Politely confirm or deny connections. If pizza is requested, " +
+          "decline it as 'fattening' in a dry, humorous way."
+      },
+      { role: "user", content: request }
+    ]
+  });
+  return (r.output_text || "").trim();
+}
+
 async function tellJoke(openai) {
   const r = await openai.responses.create({
     model: "gpt-4.1-mini",
@@ -254,6 +343,52 @@ async function tellJoke(openai) {
   process.exit(0);
     }
 
+if (intent.action === "SERVICE_SCIENCE" && intent.confidence > 0.6) {
+  const answer = await answerScience(
+    openai,
+    heardRaw,
+    buildContext()
+  );
+
+  if (answer) {
+    await speak(answer);
+    addTurn(heardRaw, answer);
+  }
+
+  continue; // ← stay on the line
+}
+if (intent.action === "SERVICE_PRAYER" && intent.confidence > 0.6) {
+  const prayer = await tellPrayer(openai);
+  if (prayer) await speak(prayer);
+  await speak("Have a nice day.");
+  process.exit(0);
+}
+if (intent.action === "SERVICE_HOROSCOPE" && intent.confidence > 0.6) {
+  const horoscope = await tellHoroscope(openai);
+  if (horoscope) await speak(horoscope);
+  await speak("Catch you later.");
+  process.exit(0);
+}
+if (intent.action === "SERVICE_STORY" && intent.confidence > 0.6) {
+  const story = await tellStory(openai);
+  if (story) await speak(story);
+  await speak("See you soon.");
+  process.exit(0);
+}
+if (intent.action === "SERVICE_WEATHER" && intent.confidence > 0.6) {
+  // demo-safe stub for now
+  await speak("The weather in New York City is fair and mild today.");
+  await speak("Goodbye.");
+  process.exit(0);
+}
+
+if (intent.action === "SERVICE_DIRECTORY" && intent.confidence > 0.6) {
+  const reply = await directoryResponse(openai, heardRaw);
+  if (reply) await speak(reply);
+  await speak("Goodbye.");
+  process.exit(0);
+}
+
 if (intent.action === "SERVICE_JOKE" && intent.confidence > 0.6) {
   const joke = await tellJoke(openai);
 
@@ -261,7 +396,7 @@ if (intent.action === "SERVICE_JOKE" && intent.confidence > 0.6) {
     await speak(joke);
   }
 
-  await speak("Goodbye.");
+  await speak("Catch you later alligator.");
   process.exit(0);
 }
 
