@@ -24,7 +24,26 @@ const log = (...a) => console.log(new Date().toISOString(), ...a);
 const CALLER_TZ = process.env.CALLER_TZ || "America/New_York";
 const CROSSBAR_FILE = "recordings/crossbar_connect_sound.wav";
 
-const VOICES = { operator: "alloy" };
+const OPERATOR_VOICES = ["echo", "shimmer", "coral", "onyx", "sage", "cedar"];
+
+function randomOperatorVoice() {
+  return OPERATOR_VOICES[
+    Math.floor(Math.random() * OPERATOR_VOICES.length)
+  ];
+}
+
+const VOICES = {
+  prayer: "marin",
+  joke: "ballad",
+  time: "verse",
+  horoscope: "nova",
+  science: "ash",
+  story: "fable",
+};
+
+let currentVoice = null;
+operatorVoice = randomOperatorVoice();
+currentVoice = operatorVoice;
 
 // =====================================================
 // CALL SESSION
@@ -134,7 +153,7 @@ function recordOnce({ outFile = "input.wav", maxMs = 6000 } = {}) {
 // =====================================================
 // AUDIO: TTS (WAV only)
 // =====================================================
-async function speak(text, voice = VOICES.operator) {
+async function speak(text) {
   const s = (text || "").trim();
   if (!s) return;
 
@@ -146,7 +165,7 @@ async function speak(text, voice = VOICES.operator) {
   return enqueueAudio(async () => {
     const speech = await openai.audio.speech.create({
       model: "gpt-4o-mini-tts",
-      voice,
+      voice: currentVoice,
       input: s,
       format: "wav"
     });
@@ -232,7 +251,7 @@ async function operatorChat(heardRaw) {
     });
 
     const reply = (r.output_text || "").trim();
-    await speak(reply);
+    await speak(reply, VOICES.operator);
     addTurn(heardRaw, reply);
   } finally {
     stopCrossbar();
@@ -355,7 +374,7 @@ async function tellJoke(openai) {
       {
         role: "system",
         content:
-          "You are a Dial-a-Joke line. Tell ONE short raw and funny joke like Richard Pryor and stop."
+          "You are a Dial-a-Joke line. Tell ONE short adult entertaining raw and funny joke as Richard Pryor would and stop."
       }
     ]
   });
@@ -428,6 +447,9 @@ async function streamTranscribe() {
 // =====================================================
 async function runCall() {
   const stopCrossbar = startCrossbar();
+currentVoice = OPERATOR_VOICES[
+  Math.floor(Math.random() * OPERATOR_VOICES.length)
+];
 
   try {
     await speak("Operator! How may I help you?"); // ← initial answer
@@ -449,47 +471,60 @@ async function runCall() {
       log("INTENT:", intent);
 
       if (intent.action === "SERVICE_TIME" && intent.confidence > 0.6) {
+          currentVoice = VOICES.time;
         await speak(`The time is ${getTime()}.`);
         await speak("Goodbye.");
+currentVoice = operatorVoice;
         break;
       }
 
       if (intent.action === "SERVICE_SCIENCE" && intent.confidence > 0.6) {
         const answer = await answerScience(openai, heardRaw, buildContext());
         if (answer) {
+          currentVoice = VOICES.science;
           await speak(answer);
+currentVoice = operatorVoice;
           addTurn(heardRaw, answer);
         }
         continue;
       }
 
       if (intent.action === "SERVICE_PRAYER" && intent.confidence > 0.6) {
+        currentVoice = VOICES.prayer;
         await speak(await tellPrayer(openai));
         await speak("Have a nice day.");
+currentVoice = operatorVoice;
         break;
       }
 
       if (intent.action === "SERVICE_HOROSCOPE" && intent.confidence > 0.6) {
+        currentVoice = VOICES.horoscope;
         await speak(await tellHoroscope(openai));
         await speak("Catch you later.");
+currentVoice = operatorVoice;
         break;
       }
 
       if (intent.action === "SERVICE_STORY" && intent.confidence > 0.6) {
+        currentVoice = VOICES.story;
         await speak(await tellStory(openai));
         await speak("See you soon.");
+currentVoice = operatorVoice;
         break;
       }
 
       if (intent.action === "SERVICE_DIRECTORY" && intent.confidence > 0.6) {
+        currentVoice = operatorVoice;
         await speak(await directoryResponse(openai, heardRaw));
         await speak("Goodbye.");
         break;
       }
 
       if (intent.action === "SERVICE_JOKE" && intent.confidence > 0.6) {
+        currentVoice = VOICES.joke;
         await speak(await tellJoke(openai));
         await speak("Catch ya later alligator.");
+currentVoice = operatorVoice;
         break;
       }
 
