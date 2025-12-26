@@ -1,0 +1,3 @@
+
+FROM andrius/asterisk:latest
+

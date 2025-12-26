@@ -1,0 +1,14 @@
+
+services:
+  asterisk:
+    image: andrius/asterisk:latest
+    container_name: asterisk
+    restart: unless-stopped
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+    volumes:
+      - ./asterisk-config:/etc/asterisk
+      - ./asterisk-sounds:/var/lib/asterisk/sounds/custom
+
+
