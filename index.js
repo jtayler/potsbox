@@ -42,6 +42,7 @@ const VOICES = {
   prayer:    "shimmer"  // ceremonial
 };
 
+let activeService = null; // null | "SCIENCE"
 let currentVoice = null;
 let operatorVoice = randomOperatorVoice();
 currentVoice = operatorVoice;
@@ -90,6 +91,7 @@ function buildContext() {
   if (!call.history.length) return "No prior conversation.";
   return call.history
     .map(t => `Caller: ${t.heard}\nOperator: ${t.replied}`)
+    .map(t => `Caller: ${t.heard}\n${t.replied}`)
     .join("\n\n");
 }
 
@@ -97,16 +99,10 @@ function buildContext() {
 // CROSSBAR (latency masking)
 // =====================================================
 function startCrossbar() {
-  let child;
-
-  enqueueAudio(async () => {
-    child = spawn("afplay", [CROSSBAR_FILE], { stdio: "ignore" });
-  });
+  const child = spawn("afplay", [CROSSBAR_FILE], { stdio: "ignore" });
 
   return () => {
-    enqueueAudio(async () => {
-      try { child && child.kill("SIGKILL"); } catch {}
-    });
+    try { child.kill("SIGKILL"); } catch {}
   };
 }
 
@@ -160,7 +156,7 @@ function recordOnce({ outFile = "input.wav", maxMs = 6000 } = {}) {
     const micInstance = mic({
       rate: "16000",
       channels: "1",
-      exitOnSilence: 1,
+      exitOnSilence: 8,
       fileType: "wav"
     });
 
@@ -272,12 +268,14 @@ async function operatorChat(heardRaw) {
         {
           role: "user",
           content:
-            `Conversation so far:\n${buildContext()}\n\nCaller: ${heardRaw}\nOperator:`
+            `Conversation so far:\n${buildContext()}\n\nCaller: ${heardRaw}\nRespond naturally`
         }
       ]
     });
 
-    const reply = (r.output_text || "").trim();
+const reply = (r.output_text || "")
+  .replace(/^operator:\s*/i, "")
+  .trim();
     await speak(reply);
     addTurn(heardRaw, reply);
   } finally {
@@ -354,10 +352,9 @@ async function tellHoroscope(openai) {
         content:
           `You are Horoscopes-by-Phone, broadcasting live like a late-night AM radio show.\n` +
           `Today is ${weekday}, ${month} ${day}. The stars are parked in ${sign}.\n\n` +
-          `Deliver ONE short horoscope for ${sign}.\n` +
+          `Deliver ONE VERY short horoscope a single sentence for ${sign}.\n` +
           `Richard Pryor raw adult humor and energy. Confident, mischievous, a little dangerous.\n` +
-          `Open with the date and sign like a DJ, then hit the prediction.\n` +
-          `No birth questions. No disclaimers. End strong.`
+          `Open with the date and sign like a DJ, then hit the prediction.\n`
       }
     ]
   });
@@ -374,7 +371,7 @@ async function answerScience(openai, question, context) {
         role: "system",
         content:
           "You are the Science Line on a public telephone exchange. " +
-          "Ask and chat with short responses. You are like Jim Al Khalili a documentarian and teacher who loves to excite people about science. Ask about one idea regarding rocks, the early earth or the universe and extra points for esoteric or oddly interesting cutting edge things you want to know about at a party why is the sky blue to why do electrons stop being random when you observe them? 2–3 sentences max simple question form. Challenge the listener to respond then talk about it. This question should be something anyone from kids to random people off the street would find amusing and you reveal the answer and talk about it in a fun way."
+          "Ask and chat with short responses. You are like Jim Al Khalili a documentarian and teacher who loves to excite people about science. Ask about one idea regarding electricity, rocks, the earth or space and the early universe and extra points for esoteric or oddly interesting cutting topics always unique and different things 2–3 sentences at most. simple question form. Challenge the listener to respond then talk about it. This question should be something anyone from kids to random people off the street would find amusing and you reveal the answer and talk about it in a fun way."
       },
       {
         role: "user",
@@ -446,7 +443,7 @@ async function streamTranscribe() {
       rate: "16000",
       channels: "1",
       // IMPORTANT: mic expects integer seconds here; 0 disables silence stop.
-      exitOnSilence: 8,
+      exitOnSilence: 12,
       fileType: "wav"
     });
 
@@ -513,7 +510,7 @@ currentVoice = OPERATOR_VOICES[
 
       const heardRaw = await streamTranscribe();
       log("HEARD:", heardRaw);
-
+startCrossbar();
 // If we asked for a location, treat the next utterance as the location (ignore intent routing)
 if (awaitingWeatherLocation) {
   awaitingWeatherLocation = false;
@@ -541,6 +538,18 @@ if (awaitingWeatherLocation) {
         break; // ← END CALL
       }
 
+if (activeService === "SCIENCE") {
+  const stopCrossbar = startCrossbar();   // start immediately
+
+  const answer = await answerScience(openai, heardRaw, buildContext());
+
+  stopCrossbar();                         // stop BEFORE speaking
+  await speak(answer);
+
+  addTurn(heardRaw, answer);
+  continue;
+}
+
       const intent = await routeIntentMasked(heardRaw);
       log("INTENT:", intent);
 
@@ -548,18 +557,21 @@ if (awaitingWeatherLocation) {
           currentVoice = VOICES.time;
         await speak(`The time is ${getTime()}.`);
         await speak("Goodbye.");
-currentVoice = operatorVoice;
         break;
       }
 
       if (intent.action === "SERVICE_SCIENCE" && intent.confidence > 0.6) {
-        const answer = await answerScience(openai, heardRaw, buildContext());
+        activeService = "SCIENCE";
+
+  const stopCrossbar = startCrossbar();
+  const answer = await answerScience(openai, heardRaw, buildContext());
         if (answer) {
           currentVoice = VOICES.science;
           await speak(answer);
-currentVoice = operatorVoice;
+
           addTurn(heardRaw, answer);
         }
+  stopCrossbar();
         continue;
       }
 
@@ -567,7 +579,6 @@ currentVoice = operatorVoice;
         currentVoice = VOICES.prayer;
         await speak(await tellPrayer(openai));
         await speak("Have a nice day.");
-currentVoice = operatorVoice;
         break;
       }
 
@@ -575,7 +586,6 @@ currentVoice = operatorVoice;
         currentVoice = VOICES.horoscope;
         await speak(await tellHoroscope(openai));
         await speak("Catch you later.");
-currentVoice = operatorVoice;
         break;
       }
 
@@ -583,7 +593,6 @@ currentVoice = operatorVoice;
         currentVoice = VOICES.story;
         await speak(await tellStory(openai));
         await speak("See you soon.");
-currentVoice = operatorVoice;
         break;
       }
 
@@ -602,12 +611,12 @@ async function narrateWeather(openai, rawReport) {
       {
         role: "system",
         content:
-          "You are a radio weather announcer.\n" +
+          "You are a Jill an RKO radio weather announcer. You introduce yourself.\n" +
           "The following weather report uses FAHRENHEIT and MPH.\n" +
           "You MUST interpret temperatures realistically.\n" +
           "Below 32°F is freezing. 20s are bitter cold.\n" +
           "Rewrite the report vividly but ACCURATELY.\n" +
-          "Do not invent warmth or comfort.\n"
+          "Do not invent warmth or comfort and keep is very short.\n"
       },
       {
         role: "user",
@@ -639,7 +648,6 @@ if (intent.action === "SERVICE_WEATHER" && intent.confidence > 0.6) {
         currentVoice = VOICES.joke;
         await speak(await tellJoke(openai));
         await speak("Catch ya later alligator.");
-currentVoice = operatorVoice;
         break;
       }
 
