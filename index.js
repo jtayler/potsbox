@@ -463,6 +463,8 @@ if (intent.action === "SERVICE_JOKE" && intent.confidence > 0.6) {
 }
 
     // Everything else → operator
-    await operatorChat(heardRaw);
+if (intent.action === "OPERATOR_CHAT" || intent.confidence < 0.6) {
+  await operatorChat(heardRaw);
+}
   }
 })();
