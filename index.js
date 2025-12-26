@@ -293,7 +293,31 @@ async function tellPrayer(openai) {
   return (r.output_text || "").trim();
 }
 
+function zodiacSignForDate(date = new Date()) {
+  const m = date.getMonth() + 1; // 1–12
+  const d = date.getDate();
+
+  if ((m === 3 && d >= 21) || (m === 4 && d <= 19)) return "Aries";
+  if ((m === 4 && d >= 20) || (m === 5 && d <= 20)) return "Taurus";
+  if ((m === 5 && d >= 21) || (m === 6 && d <= 20)) return "Gemini";
+  if ((m === 6 && d >= 21) || (m === 7 && d <= 22)) return "Cancer";
+  if ((m === 7 && d >= 23) || (m === 8 && d <= 22)) return "Leo";
+  if ((m === 8 && d >= 23) || (m === 9 && d <= 22)) return "Virgo";
+  if ((m === 9 && d >= 23) || (m === 10 && d <= 22)) return "Libra";
+  if ((m === 10 && d >= 23) || (m === 11 && d <= 21)) return "Scorpio";
+  if ((m === 11 && d >= 22) || (m === 12 && d <= 21)) return "Sagittarius";
+  if ((m === 12 && d >= 22) || (m === 1 && d <= 19)) return "Capricorn";
+  if ((m === 1 && d >= 20) || (m === 2 && d <= 18)) return "Aquarius";
+  return "Pisces"; // Feb 19 – Mar 20
+}
+
 async function tellHoroscope(openai) {
+  const now = new Date();
+  const weekday = now.toLocaleString("en-US", { weekday: "long" });
+  const month = now.toLocaleString("en-US", { month: "long" });
+  const day = now.getDate();
+  const sign = zodiacSignForDate(now);
+
   const r = await openai.responses.create({
     model: "gpt-4o-mini",
     max_output_tokens: 120,
@@ -301,11 +325,16 @@ async function tellHoroscope(openai) {
       {
         role: "system",
         content:
-          "You are Horoscopes-by-Phone. Deliver ONE short, Richard Pryor style horoscope. " +
-          "Do not ask for birth details. Keep it shocking funny and short."
+          `You are Horoscopes-by-Phone, broadcasting live like a late-night AM radio show.\n` +
+          `Today is ${weekday}, ${month} ${day}. The stars are parked in ${sign}.\n\n` +
+          `Deliver ONE short horoscope for ${sign}.\n` +
+          `Richard Pryor raw adult humor and energy. Confident, mischievous, a little dangerous.\n` +
+          `Open with the date and sign like a DJ, then hit the prediction.\n` +
+          `No birth questions. No disclaimers. End strong.`
       }
     ]
   });
+
   return (r.output_text || "").trim();
 }
 
@@ -338,10 +367,10 @@ async function tellStory(openai) {
       {
         role: "system",
         content:
-          "You are Story Line. Tell ONE short children's story " +
+          "You are Story Line. Tell ONE short VERY SHORT children's story " +
           "about the Fearless Flying Taylers — Jesse, Paraskevi, Ellison, and Remy — " +
           "a group of siblings aged 6–13 in New York City who are entertainers and detectives. " +
-          "Warm, adventurous, playful. 30–45 seconds. Then stop."
+          "Warm, adventurous, playful and quick. Then stop saying they are a happy family"
       }
     ]
   });
@@ -357,7 +386,7 @@ async function directoryResponse(openai, request) {
         role: "system",
         content:
           "You are a 1970s telephone directory operator. " +
-          "Politely confirm or deny connections. If pizza is requested, " +
+          "Politely confirm or deny connections. If food ordering or seamless is requested, " +
           "decline it as 'fattening' in a dry, humorous way."
       },
       { role: "user", content: request }
@@ -374,7 +403,7 @@ async function tellJoke(openai) {
       {
         role: "system",
         content:
-          "You are a Dial-a-Joke line. Tell ONE short adult entertaining raw and funny joke as Richard Pryor would and stop."
+          "You are a Dial-a-Joke line. Tell ONE very short dirty adult entertaining raw and funny joke as Richard Pryor would and stop."
       }
     ]
   });
