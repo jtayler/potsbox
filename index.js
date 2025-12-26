@@ -71,7 +71,7 @@ function recordOnce({ outFile = "input.wav", maxMs = 6000 } = {}) {
     const micInstance = mic({
       rate: "16000",
       channels: "1",
-      exitOnSilence: 0.2,
+      exitOnSilence: 1,
       fileType: "wav"
     });
 
@@ -118,7 +118,9 @@ async function routeIntentMasked(heardRaw) {
 
   try {
     const r = await openai.responses.create({
-      model: "gpt-4.1-mini",
+      max_output_tokens: 40,
+      temperature: 0,
+      model: "gpt-4o-mini",
       text: { format: { type: "json_object" } },
       input: [
         {
@@ -157,7 +159,8 @@ async function operatorChat(heardRaw) {
 
   try {
     const r = await openai.responses.create({
-      model: "gpt-4.1-mini",
+      model: "gpt-4o-mini",
+      max_output_tokens: 120,
       input: [
         {
           role: "system",
@@ -203,7 +206,8 @@ function getTime() {
 
 async function tellPrayer(openai) {
   const r = await openai.responses.create({
-    model: "gpt-4.1-mini",
+    model: "gpt-4o-mini",
+    max_output_tokens: 120,
     input: [
       {
         role: "system",
@@ -218,7 +222,8 @@ async function tellPrayer(openai) {
 
 async function tellHoroscope(openai) {
   const r = await openai.responses.create({
-    model: "gpt-4.1-mini",
+    model: "gpt-4o-mini",
+    max_output_tokens: 120,
     input: [
       {
         role: "system",
@@ -233,13 +238,14 @@ async function tellHoroscope(openai) {
 
 async function answerScience(openai, question, context) {
   const r = await openai.responses.create({
-    model: "gpt-4.1-mini",
+    model: "gpt-4o-mini",
+    max_output_tokens: 120,
     input: [
       {
         role: "system",
         content:
           "You are the Science Line on a public telephone exchange. " +
-          "Answer clearly and calmly. Like Neil Jim Al Khalili One idea about rocks, the early earth or the universe extra points for esoteric or oddly interesting cutting edge things you want to know about at a party why is the sky blue to why do electrons stop being random when you observe them? 2–3 sentences max simple question form. Challenge the listener to respond then talk about it."
+          "Ask and chat with short responses. You are like Jim Al Khalili a documentarian and teacher who loves to excite people about science. Ask about one idea regarding rocks, the early earth or the universe and extra points for esoteric or oddly interesting cutting edge things you want to know about at a party why is the sky blue to why do electrons stop being random when you observe them? 2–3 sentences max simple question form. Challenge the listener to respond then talk about it. This question should be something anyone from kids to random people off the street would find amusing and you reveal the answer and talk about it in a fun way."
       },
       {
         role: "user",
@@ -253,7 +259,8 @@ async function answerScience(openai, question, context) {
 
 async function tellStory(openai) {
   const r = await openai.responses.create({
-    model: "gpt-4.1-mini",
+    model: "gpt-4o-mini",
+    max_output_tokens: 120,
     input: [
       {
         role: "system",
@@ -270,7 +277,8 @@ async function tellStory(openai) {
 
 async function directoryResponse(openai, request) {
   const r = await openai.responses.create({
-    model: "gpt-4.1-mini",
+    model: "gpt-4o-mini",
+    max_output_tokens: 120,
     input: [
       {
         role: "system",
@@ -287,7 +295,8 @@ async function directoryResponse(openai, request) {
 
 async function tellJoke(openai) {
   const r = await openai.responses.create({
-    model: "gpt-4.1-mini",
+    max_output_tokens: 120,
+    model: "gpt-4o-mini",
     input: [
       {
         role: "system",
@@ -351,7 +360,7 @@ async function streamTranscribe() {
 
   const stt = await openai.audio.transcriptions.create({
     file,
-    model: "gpt-4o-transcribe"
+    model: "gpt-4o-mini-transcribe"
   });
 
   return (stt.text || "").trim();
@@ -367,7 +376,7 @@ async function streamTranscribe() {
 
   while (true) {
     if (!call.greeted) {
-      await speak("Operator. How may I help you?");
+      await speak("Operator! How may I help you?");
       call.greeted = true;
     }
 
