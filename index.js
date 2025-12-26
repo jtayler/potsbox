@@ -2,6 +2,7 @@
 // CommonJS — paste and run
 
 const WebSocket = require("ws");
+const http = require("http");
 
 const fs = require("fs");
 const mic = require("mic");
@@ -64,6 +65,48 @@ function startCrossbar() {
 }
 
 // =====================================================
+// SPARK IT UP
+// =====================================================
+
+http.createServer((req, res) => {
+  if (req.method === "POST" && req.url === "/call/start") {
+    runCall().catch(console.error);
+    res.end("CALL STARTED\n");
+    return;
+  }
+  res.statusCode = 404;
+  res.end();
+}).listen(3000, () => {
+  console.log("Listening on :3000");
+});
+
+
+// =====================================================
+// FILES: CLEANUP AT STARTUP
+// =====================================================
+
+const TTS_DIR = "asterisk-sounds/tts";
+const MAX_AGE_MS = 60 * 1000; // 60 seconds
+
+function cleanupTTS() {
+  if (!fs.existsSync(TTS_DIR)) return;
+
+  const now = Date.now();
+
+  for (const f of fs.readdirSync(TTS_DIR)) {
+    const p = `${TTS_DIR}/${f}`;
+    try {
+      const stat = fs.statSync(p);
+      if (now - stat.mtimeMs > MAX_AGE_MS) {
+        fs.unlinkSync(p);
+      }
+    } catch {}
+  }
+}
+
+cleanupTTS();
+
+// =====================================================
 // AUDIO: RECORD MIC
 // =====================================================
 function recordOnce({ outFile = "input.wav", maxMs = 6000 } = {}) {
@@ -95,18 +138,29 @@ async function speak(text, voice = VOICES.operator) {
   const s = (text || "").trim();
   if (!s) return;
 
-  log("TTS:", s);
+  const fname = `tts-${call.id}-${Date.now()}.wav`;
+  const outPath = `asterisk-sounds/tts/${fname}`;
+
+  log("TTS:", s, "→", fname);
 
   return enqueueAudio(async () => {
     const speech = await openai.audio.speech.create({
       model: "gpt-4o-mini-tts",
-      voice,                 // ← fixed
+      voice,
       input: s,
       format: "wav"
     });
 
-    fs.writeFileSync("out.wav", Buffer.from(await speech.arrayBuffer()));
-    await new Promise(r => exec("afplay out.wav", r));
+    const buf = Buffer.from(await speech.arrayBuffer());
+    fs.writeFileSync(outPath, buf);
+
+    // 🔊 LOCAL SPEAKER (keep this until phone arrives)
+    await new Promise(r => exec(`afplay "${outPath}"`, r));
+
+    log("READY FOR ASTERISK PLAYBACK:", `custom/tts/${fname}`);
+    setTimeout(() => {
+      fs.unlink(outPath, () => {});
+    }, 60_000); // 60s is plenty
   });
 }
 
@@ -367,104 +421,82 @@ async function streamTranscribe() {
 }
 
 // =====================================================
-// MAIN LOOP
+// MAIN CALL
 // =====================================================
-(async function run() {
-  log("CALL START:", call.id);
+// =====================================================
+// CALL LOOP (DO NOT AUTO-START)
+// =====================================================
+async function runCall() {
+  const stopCrossbar = startCrossbar();
 
-    const stopCrossbar = startCrossbar();
+  try {
+    await speak("Operator! How may I help you?"); // ← initial answer
+    while (true) {
+      const heardRaw = await streamTranscribe();
+      log("HEARD:", heardRaw);
 
-  while (true) {
-    if (!call.greeted) {
-      await speak("Operator! How may I help you?");
-      call.greeted = true;
+      if (!heardRaw) {
+        await speak("Are you still there?");
+        continue;
+      }
+
+      if (/bye|goodbye|that's all|hang up/i.test(heardRaw)) {
+        await speak("Alright. Goodbye.");
+        break; // ← END CALL
+      }
+
+      const intent = await routeIntentMasked(heardRaw);
+      log("INTENT:", intent);
+
+      if (intent.action === "SERVICE_TIME" && intent.confidence > 0.6) {
+        await speak(`The time is ${getTime()}.`);
+        await speak("Goodbye.");
+        break;
+      }
+
+      if (intent.action === "SERVICE_SCIENCE" && intent.confidence > 0.6) {
+        const answer = await answerScience(openai, heardRaw, buildContext());
+        if (answer) {
+          await speak(answer);
+          addTurn(heardRaw, answer);
+        }
+        continue;
+      }
+
+      if (intent.action === "SERVICE_PRAYER" && intent.confidence > 0.6) {
+        await speak(await tellPrayer(openai));
+        await speak("Have a nice day.");
+        break;
+      }
+
+      if (intent.action === "SERVICE_HOROSCOPE" && intent.confidence > 0.6) {
+        await speak(await tellHoroscope(openai));
+        await speak("Catch you later.");
+        break;
+      }
+
+      if (intent.action === "SERVICE_STORY" && intent.confidence > 0.6) {
+        await speak(await tellStory(openai));
+        await speak("See you soon.");
+        break;
+      }
+
+      if (intent.action === "SERVICE_DIRECTORY" && intent.confidence > 0.6) {
+        await speak(await directoryResponse(openai, heardRaw));
+        await speak("Goodbye.");
+        break;
+      }
+
+      if (intent.action === "SERVICE_JOKE" && intent.confidence > 0.6) {
+        await speak(await tellJoke(openai));
+        await speak("Catch ya later alligator.");
+        break;
+      }
+
+      // Default
+      await operatorChat(heardRaw);
     }
-
-
-const heardRaw = await streamTranscribe();
-    log("HEARD:", heardRaw);
-
-    if (!heardRaw) {
-      await speak("Are you still there?");
-      continue;
-    }
-
-    // Immediate hang-up
-    if (/bye|goodbye|that's all|hang up/i.test(heardRaw)) {
-      await speak("Alright. Goodbye.");
-      process.exit(0);
-    }
-
-    const intent = await routeIntentMasked(heardRaw);
-    log("INTENT:", intent);
-
-    if (intent.action === "SERVICE_TIME" && intent.confidence > 0.6) {
-      const t = getTime();
-      await speak(`The time is ${t}.`);
-  await speak("Goodbye.");
-  process.exit(0);
-    }
-
-if (intent.action === "SERVICE_SCIENCE" && intent.confidence > 0.6) {
-  const answer = await answerScience(
-    openai,
-    heardRaw,
-    buildContext()
-  );
-
-  if (answer) {
-    await speak(answer);
-    addTurn(heardRaw, answer);
+  } finally {
+    stopCrossbar();
   }
-
-  continue; // ← stay on the line
 }
-if (intent.action === "SERVICE_PRAYER" && intent.confidence > 0.6) {
-  const prayer = await tellPrayer(openai);
-  if (prayer) await speak(prayer);
-  await speak("Have a nice day.");
-  process.exit(0);
-}
-if (intent.action === "SERVICE_HOROSCOPE" && intent.confidence > 0.6) {
-  const horoscope = await tellHoroscope(openai);
-  if (horoscope) await speak(horoscope);
-  await speak("Catch you later.");
-  process.exit(0);
-}
-if (intent.action === "SERVICE_STORY" && intent.confidence > 0.6) {
-  const story = await tellStory(openai);
-  if (story) await speak(story);
-  await speak("See you soon.");
-  process.exit(0);
-}
-if (intent.action === "SERVICE_WEATHER" && intent.confidence > 0.6) {
-  // demo-safe stub for now
-  await speak("The weather in New York City is fair and mild today.");
-  await speak("Goodbye.");
-  process.exit(0);
-}
-
-if (intent.action === "SERVICE_DIRECTORY" && intent.confidence > 0.6) {
-  const reply = await directoryResponse(openai, heardRaw);
-  if (reply) await speak(reply);
-  await speak("Goodbye.");
-  process.exit(0);
-}
-
-if (intent.action === "SERVICE_JOKE" && intent.confidence > 0.6) {
-  const joke = await tellJoke(openai);
-
-  if (joke) {
-    await speak(joke);
-  }
-
-  await speak("Catch ya later alligator.");
-  process.exit(0);
-}
-
-    // Everything else → operator
-if (intent.action === "OPERATOR_CHAT" || intent.confidence < 0.6) {
-  await operatorChat(heardRaw);
-}
-  }
-})();
