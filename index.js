@@ -42,8 +42,34 @@ const VOICES = {
 };
 
 let currentVoice = null;
-operatorVoice = randomOperatorVoice();
+let operatorVoice = randomOperatorVoice();
 currentVoice = operatorVoice;
+
+const DEFAULT_WEATHER_CITY = "New York City";
+let awaitingWeatherLocation = false;
+async function getWeatherReport(city) {
+  // 1) geocode city -> lat/lon
+  const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`;
+  const geo = await fetch(geoUrl).then(r => r.json());
+  const hit = geo?.results?.[0];
+  if (!hit) return null;
+
+  const { latitude, longitude, name, admin1, country } = hit;
+
+  // 2) current weather
+  const wxUrl =
+    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
+    `&current=temperature_2m,wind_speed_10m,precipitation,weather_code` +
+    `&temperature_unit=fahrenheit&wind_speed_unit=mph`;
+  const wx = await fetch(wxUrl).then(r => r.json());
+
+  const cur = wx?.current;
+  if (!cur) return null;
+
+  // Super short “radio” read (no fake precision)
+  const place = [name, admin1, country].filter(Boolean).join(", ");
+  return `Weather for ${place}: ${Math.round(cur.temperature_2m)} degrees, wind ${Math.round(cur.wind_speed_10m)} miles an hour, precipitation ${cur.precipitation} inches right now.`;
+}
 
 // =====================================================
 // CALL SESSION
@@ -251,7 +277,7 @@ async function operatorChat(heardRaw) {
     });
 
     const reply = (r.output_text || "").trim();
-    await speak(reply, VOICES.operator);
+    await speak(reply);
     addTurn(heardRaw, reply);
   } finally {
     stopCrossbar();
@@ -483,8 +509,26 @@ currentVoice = OPERATOR_VOICES[
   try {
     await speak("Operator! How may I help you?"); // ← initial answer
     while (true) {
+
       const heardRaw = await streamTranscribe();
       log("HEARD:", heardRaw);
+
+// If we asked for a location, treat the next utterance as the location (ignore intent routing)
+if (awaitingWeatherLocation) {
+  awaitingWeatherLocation = false;
+  const city = heardRaw.trim() || DEFAULT_WEATHER_CITY;
+
+  const report = await getWeatherReport(city);
+  if (!report) {
+    await speak("I couldn't find that location. Try saying the city and state.");
+    awaitingWeatherLocation = true;
+    continue;
+  }
+
+  await speak(report);
+  await speak("Goodbye.");
+  break;
+}
 
       if (!heardRaw) {
         await speak("Are you still there?");
@@ -548,6 +592,18 @@ currentVoice = operatorVoice;
         await speak("Goodbye.");
         break;
       }
+
+if (intent.action === "SERVICE_WEATHER" && intent.confidence > 0.6) {
+  const report = await getWeatherReport(DEFAULT_WEATHER_CITY);
+  if (!report) {
+    await speak("Weather service is temporarily unavailable. Goodbye.");
+    break;
+  }
+
+  await speak(report);
+  await speak("Goodbye.");
+  break;
+}
 
       if (intent.action === "SERVICE_JOKE" && intent.confidence > 0.6) {
         currentVoice = VOICES.joke;
