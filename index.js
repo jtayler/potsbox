@@ -24,7 +24,7 @@ const log = (...a) => console.log(new Date().toISOString(), ...a);
 const CALLER_TZ = process.env.CALLER_TZ || "America/New_York";
 const CROSSBAR_FILE = "recordings/crossbar_connect_sound.wav";
 
-const OPERATOR_VOICES = ["echo", "shimmer", "coral", "onyx", "sage", "cedar"];
+const OPERATOR_VOICES = ["verse", "nova", "ash", "shimmer", "marin", "ballad", "echo", "coral", "onyx", "sage", "cedar", "fable"];
 
 function randomOperatorVoice() {
   return OPERATOR_VOICES[
@@ -33,12 +33,13 @@ function randomOperatorVoice() {
 }
 
 const VOICES = {
-  prayer: "marin",
-  joke: "ballad",
-  time: "verse",
-  horoscope: "nova",
-  science: "ash",
-  story: "fable",
+  weather:   "marin",   // announcer, descriptive
+  time:      "verse",   // crisp, factual
+  horoscope: "nova",    // DJ energy
+  science:   "ash",     // thoughtful, curious
+  story:     "fable",   // warm narrator
+  joke:      "ballad",  // punchy
+  prayer:    "shimmer"  // ceremonial
 };
 
 let currentVoice = null;
@@ -526,7 +527,7 @@ if (awaitingWeatherLocation) {
   }
 
   await speak(report);
-  await speak("Goodbye.");
+  await speak("Enjoy your day! Thanks for calling.");
   break;
 }
 
@@ -593,17 +594,46 @@ currentVoice = operatorVoice;
         break;
       }
 
+async function narrateWeather(openai, rawReport) {
+  const r = await openai.responses.create({
+    model: "gpt-4o-mini",
+    max_output_tokens: 120,
+    input: [
+      {
+        role: "system",
+        content:
+          "You are a radio weather announcer.\n" +
+          "The following weather report uses FAHRENHEIT and MPH.\n" +
+          "You MUST interpret temperatures realistically.\n" +
+          "Below 32°F is freezing. 20s are bitter cold.\n" +
+          "Rewrite the report vividly but ACCURATELY.\n" +
+          "Do not invent warmth or comfort.\n"
+      },
+      {
+        role: "user",
+        content: rawReport
+      }
+    ]
+  });
+
+  return (r.output_text || "").trim();
+}
+
 if (intent.action === "SERVICE_WEATHER" && intent.confidence > 0.6) {
+          currentVoice = VOICES.weather;
+
   const report = await getWeatherReport(DEFAULT_WEATHER_CITY);
   if (!report) {
     await speak("Weather service is temporarily unavailable. Goodbye.");
     break;
   }
 
-  await speak(report);
+  const spoken = await narrateWeather(openai, report);
+  await speak(spoken);
   await speak("Goodbye.");
   break;
 }
+
 
       if (intent.action === "SERVICE_JOKE" && intent.confidence > 0.6) {
         currentVoice = VOICES.joke;
