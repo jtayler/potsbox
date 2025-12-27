@@ -65,6 +65,13 @@ const handlers = {
             return;
         }
 
+  if (service === "STORY") {
+    const opener = await answerStory(openai, "", "No prior conversation.");
+    await speak(opener);
+    addTurn("[story opener]", opener);
+    return;
+  }
+
         const svc = SERVICES[service];
         if (svc?.opener) {
             await speak(svc.opener);

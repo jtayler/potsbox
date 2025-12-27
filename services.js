@@ -67,7 +67,6 @@ DIRECTORY: {
 STORY: {
   type: "loop",
   voice: VOICES.story,
-  opener: "Would you like to hear a story?",
   onTurn: "story"
 },
 
