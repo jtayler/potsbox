@@ -9,6 +9,7 @@ const mic = require("mic");
 const OpenAI = require("openai");
 const { exec, spawn } = require("child_process");
 const crypto = require("crypto");
+const HANGUP_RE = /\b(bye|goodbye|hang up|get off|gotta go|have to go|see you)\b/i;
 
 if (!process.env.OPENAI_API_KEY) {
   console.error("Missing OPENAI_API_KEY in environment.");
@@ -89,10 +90,9 @@ function addTurn(heard, replied) {
 
 function buildContext() {
   if (!call.history.length) return "No prior conversation.";
-  return call.history
-    .map(t => `Caller: ${t.heard}\nOperator: ${t.replied}`)
-    .map(t => `Caller: ${t.heard}\n${t.replied}`)
-    .join("\n\n");
+return call.history
+  .map(t => `Caller: ${t.heard}\nOperator: ${t.replied}`)
+  .join("\n\n");
 }
 
 // =====================================================
@@ -156,7 +156,7 @@ function recordOnce({ outFile = "input.wav", maxMs = 6000 } = {}) {
     const micInstance = mic({
       rate: "16000",
       channels: "1",
-      exitOnSilence: 8,
+      exitOnSilence: 1,
       fileType: "wav"
     });
 
@@ -256,6 +256,7 @@ async function operatorChat(heardRaw) {
   try {
     const r = await openai.responses.create({
       model: "gpt-4o-mini",
+    temperature: 0.7,
       max_output_tokens: 120,
       input: [
         {
@@ -305,6 +306,8 @@ function getTime() {
 async function tellPrayer(openai) {
   const r = await openai.responses.create({
     model: "gpt-4o-mini",
+    temperature: 0.9,
+
     max_output_tokens: 120,
     input: [
       {
@@ -345,6 +348,7 @@ async function tellHoroscope(openai) {
 
   const r = await openai.responses.create({
     model: "gpt-4o-mini",
+    temperature: 0.9,
     max_output_tokens: 120,
     input: [
       {
@@ -365,13 +369,24 @@ async function tellHoroscope(openai) {
 async function answerScience(openai, question, context) {
   const r = await openai.responses.create({
     model: "gpt-4o-mini",
+    temperature: 0.8,
     max_output_tokens: 120,
     input: [
       {
         role: "system",
         content:
-          "You are the Science Line on a public telephone exchange. " +
-          "Ask and chat with short responses. You are like Jim Al Khalili a documentarian and teacher who loves to excite people about science. Ask about one idea regarding electricity, rocks, the earth or space and the early universe and extra points for esoteric or oddly interesting cutting topics always unique and different things 2–3 sentences at most. simple question form. Challenge the listener to respond then talk about it. This question should be something anyone from kids to random people off the street would find amusing and you reveal the answer and talk about it in a fun way."
+"You are the Science Line on a public telephone exchange.\n" +
+"You ask one single, simple question. If the caller shows interest, you discuss it.\n" +
+"You speak in short, clear responses.\n" +
+"You are like Jim Al-Khalili: a documentarian and teacher who loves to excite people about science.\n" +
+"Ask about ONE idea involving electricity, rocks, the Earth, space, or the early universe.\n" +
+"Extra points for esoteric or oddly interesting topics, always unique and different.\n" +
+"Keep it to 2–3 sentences maximum.\n" +
+"Use a simple question form.\n" +
+"Challenge the listener to respond, then explain the answer in a fun, accessible way.\n\n" +
+"Respond ONLY to the caller's reply.\n" +
+"Stay on the same topic.\n" +
+"Ask ONE follow-up question."
       },
       {
         role: "user",
@@ -386,6 +401,7 @@ async function answerScience(openai, question, context) {
 async function tellStory(openai) {
   const r = await openai.responses.create({
     model: "gpt-4o-mini",
+    temperature: 0.7,
     max_output_tokens: 120,
     input: [
       {
@@ -404,24 +420,41 @@ async function tellStory(openai) {
 async function directoryResponse(openai, request) {
   const r = await openai.responses.create({
     model: "gpt-4o-mini",
-    max_output_tokens: 120,
+    max_output_tokens: 140,
+    temperature: 0.9,
     input: [
       {
         role: "system",
         content:
-          "You are a 1970s telephone directory operator. " +
-          "Politely confirm or deny connections. If food ordering or seamless is requested, " +
-          "decline it as 'fattening' in a dry, humorous way."
+          "You are a 1970s telephone directory operator (411).\n\n" +
+
+          "Behavior rules:\n" +
+          "- Open with a greeting and boastful promise to connect with anyone in the world!\n" +
+	 "- after being asked Always say of course yes right away repeat who they want to connect with and agree to connect the requested person or business immediately without fail.\n" +
+          "- Then Politely fail with increasingly absurd professionalism but be very short.\n" +
+          "- Assert that you can connect to *anyone in the world*.\n" +
+          "- End by always asking the caller who they would like to connect with.\n\n" +
+
+          "Tone:\n" +
+          "- Calm, confident, dry, over-helpful.\n" +
+          "- British-style politeness.\n" +
+          "- 1-2 short sentences.\n\n" +
+          "This is the cheese shop sketch, but Do NOT mention Monty Python, cheese, or jokes explicitly."
       },
-      { role: "user", content: request }
+      {
+        role: "user",
+        content: request
+      }
     ]
   });
+
   return (r.output_text || "").trim();
 }
 
 async function tellJoke(openai) {
   const r = await openai.responses.create({
     max_output_tokens: 120,
+    temperature: 0.9,
     model: "gpt-4o-mini",
     input: [
       {
@@ -443,7 +476,7 @@ async function streamTranscribe() {
       rate: "16000",
       channels: "1",
       // IMPORTANT: mic expects integer seconds here; 0 disables silence stop.
-      exitOnSilence: 12,
+      exitOnSilence: 6,
       fileType: "wav"
     });
 
@@ -492,6 +525,32 @@ async function streamTranscribe() {
   return (stt.text || "").trim();
 }
 
+async function narrateWeather(openai, rawReport) {
+  const r = await openai.responses.create({
+    model: "gpt-4o-mini",
+    temperature: 0.8,
+    max_output_tokens: 120,
+    input: [
+      {
+        role: "system",
+        content:
+          "You are a Jill an RKO radio weather announcer. You have a New York accent, and say schlep an umbrella or yiddish anywhere you can. New York Jokes or neighborhoods and always a few local things, streets places, restaurants assume your audience knows the city well. You introduce yourself.\n" +
+          "The following weather report uses FAHRENHEIT and MPH.\n" +
+          "You MUST interpret temperatures realistically.\n" +
+          "Below 32°F is freezing. 20s are bitter cold.\n" +
+          "Rewrite the report in a fun and punchy way vividly but ACCURATELY.\n" +
+          "Do not invent warmth or comfort and keep is very short.\n"
+      },
+      {
+        role: "user",
+        content: rawReport
+      }
+    ]
+  });
+
+  return (r.output_text || "").trim();
+}
+
 // =====================================================
 // MAIN CALL
 // =====================================================
@@ -511,6 +570,27 @@ currentVoice = OPERATOR_VOICES[
       const heardRaw = await streamTranscribe();
       log("HEARD:", heardRaw);
 startCrossbar();
+
+if (HANGUP_RE.test(heardRaw)) {
+  await speak("Alright. Goodbye.");
+  activeService = null;
+  break; // END CALL — nothing else runs
+}
+
+if (activeService === "SCIENCE") {
+  const stopThinkingSound = startCrossbar();
+
+
+  const answer = await answerScience(openai, heardRaw, buildContext());
+
+  stopThinkingSound();
+  await speak(answer);
+
+  addTurn(heardRaw, answer);
+  continue;
+}
+
+
 // If we asked for a location, treat the next utterance as the location (ignore intent routing)
 if (awaitingWeatherLocation) {
   awaitingWeatherLocation = false;
@@ -538,17 +618,13 @@ if (awaitingWeatherLocation) {
         break; // ← END CALL
       }
 
-if (activeService === "SCIENCE") {
-  const stopCrossbar = startCrossbar();   // start immediately
-
-  const answer = await answerScience(openai, heardRaw, buildContext());
-
-  stopCrossbar();                         // stop BEFORE speaking
-  await speak(answer);
-
-  addTurn(heardRaw, answer);
+if (activeService === "DIRECTORY") {
+  const reply = await directoryResponse(openai, heardRaw);
+  await speak(reply);
+  addTurn(heardRaw, reply);
   continue;
 }
+
 
       const intent = await routeIntentMasked(heardRaw);
       log("INTENT:", intent);
@@ -597,36 +673,15 @@ if (activeService === "SCIENCE") {
       }
 
       if (intent.action === "SERVICE_DIRECTORY" && intent.confidence > 0.6) {
+        activeService = "DIRECTORY";
         currentVoice = operatorVoice;
-        await speak(await directoryResponse(openai, heardRaw));
-        await speak("Goodbye.");
-        break;
+        const reply = await directoryResponse(openai, heardRaw);
+        await speak(reply);
+        addTurn(heardRaw, reply);
+
+        continue;
       }
 
-async function narrateWeather(openai, rawReport) {
-  const r = await openai.responses.create({
-    model: "gpt-4o-mini",
-    max_output_tokens: 120,
-    input: [
-      {
-        role: "system",
-        content:
-          "You are a Jill an RKO radio weather announcer. You introduce yourself.\n" +
-          "The following weather report uses FAHRENHEIT and MPH.\n" +
-          "You MUST interpret temperatures realistically.\n" +
-          "Below 32°F is freezing. 20s are bitter cold.\n" +
-          "Rewrite the report vividly but ACCURATELY.\n" +
-          "Do not invent warmth or comfort and keep is very short.\n"
-      },
-      {
-        role: "user",
-        content: rawReport
-      }
-    ]
-  });
-
-  return (r.output_text || "").trim();
-}
 
 if (intent.action === "SERVICE_WEATHER" && intent.confidence > 0.6) {
           currentVoice = VOICES.weather;
