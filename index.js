@@ -11,6 +11,8 @@ const { exec, spawn } = require("child_process");
 const crypto = require("crypto");
 const HANGUP_RE = /\b(bye|goodbye|hang up|get off|gotta go|have to go|see you)\b/i;
 
+const url = require("url");
+
 if (!process.env.OPENAI_API_KEY) {
   console.error("Missing OPENAI_API_KEY in environment.");
   process.exit(1);
@@ -40,6 +42,7 @@ const VOICES = {
   science:   "ash",     // thoughtful, curious
   story:     "fable",   // warm narrator
   joke:      "ballad",  // punchy
+  complaints:"ballad",  // punchy
   prayer:    "shimmer"  // ceremonial
 };
 
@@ -110,18 +113,45 @@ function startCrossbar() {
 // SPARK IT UP
 // =====================================================
 
+
 http.createServer((req, res) => {
-  if (req.method === "POST" && req.url === "/call/start") {
-    runCall().catch(console.error);
-    res.end("CALL STARTED\n");
+  if (req.method === "POST" && req.url.startsWith("/call/start")) {
+    const { query } = url.parse(req.url, true);
+    const exten = (query.exten || "0").trim();
+
+    log("INCOMING CALL:", exten);
+
+    startCall({ exten });
+
+    res.end("OK\n");
     return;
   }
+
   res.statusCode = 404;
   res.end();
 }).listen(3000, () => {
   console.log("Listening on :3000");
 });
 
+function startCall({ exten }) {
+  const serviceByExten = {
+    "0":    "OPERATOR",
+    "411":  "DIRECTORY",
+    "8463": "TIME",
+    "9328": "WEATHER",
+    "7243": "SCIENCE",
+    "7827": "HOROSCOPE",
+    "7867": "STORY",
+    "9857": "JOKE",
+    "4637": "PRAYER",
+    "2333": "COMPLAINTS"
+  };
+
+  activeService = serviceByExten[exten] || "OPERATOR";
+  call.history = [];
+  call.greeted = false;
+  runCall().catch(console.error);
+}
 
 // =====================================================
 // FILES: CLEANUP AT STARTUP
@@ -230,6 +260,7 @@ async function routeIntentMasked(heardRaw) {
 "- SERVICE_JOKE\n" +
 "- SERVICE_PRAYER\n" +
 "- SERVICE_HOROSCOPE\n" +
+"- SERVICE_COMPLAINTS\n" +
 "- SERVICE_SCIENCE\n" +
 "- SERVICE_STORY\n" +
 "- SERVICE_DIRECTORY\n" +
@@ -314,7 +345,7 @@ async function tellPrayer(openai) {
         role: "system",
         content:
           "You are Dial-a-Prayer. Offer ONE short, sharp and humorous, atheist prayer " +
-          "It is part of the Flying Spaghetti Monster, you know the religion. End by ripping religion."
+          "It is part of the Flying Spaghetti Monster, you know the religion. Say 'Rah-Men' for Raman noodles instead of Amen- End by ripping religion."
       }
     ]
   });
@@ -365,6 +396,34 @@ async function tellHoroscope(openai) {
 
   return (r.output_text || "").trim();
 }
+
+async function answerComplaintDepartment(openai, question, context) {
+  const r = await openai.responses.create({
+    model: "gpt-4o-mini",
+    temperature: 0.8,
+    max_output_tokens: 120,
+    input: [
+      {
+        role: "system",
+        content:
+"You are the Complaint Line.\n" +
+"You speak in short, clear responses.\n" +
+"You basically the argument clinic sketch from monty python.\n" +
+"You start the conversation by cordially asking what the complaint is.\n" +
+"Then of course, you repeat the idea curtly and then absurdly insult the caller with silly phrases like shut your gob you tit! Your kind really makes me want to puke. And you berate the person in a funny monty  python way.\n" +
+"Keep it to 2–3 sentences maximum.\n" +
+"The idea is whatever they say, you acknowledge and then answer with absurd insults. If they say stop then you say - oh? I thought you called abuse? Complaints are down the hall, goodbye\n"
+      },
+      {
+        role: "user",
+        content:
+          `Conversation so far:\n${context}\n\nCaller asks:\n${question}`
+      }
+    ]
+  });
+  return (r.output_text || "").trim();
+}
+
 
 async function answerScience(openai, question, context) {
   const r = await openai.responses.create({
@@ -534,7 +593,7 @@ async function narrateWeather(openai, rawReport) {
       {
         role: "system",
         content:
-          "You are a Jill an RKO radio weather announcer. You have a New York accent, and say schlep an umbrella or yiddish anywhere you can. New York Jokes or neighborhoods and always a few local things, streets places, restaurants assume your audience knows the city well. You introduce yourself.\n" +
+          "You are a Jill an RKO radio weather announcer. You have a New York accent, and if it will rain say schlep an umbrella or yiddish anywhere you can. New York Jokes or neighborhoods and always a few local things, streets places, restaurants assume your audience knows the city well. You introduce yourself.\n" +
           "The following weather report uses FAHRENHEIT and MPH.\n" +
           "You MUST interpret temperatures realistically.\n" +
           "Below 32°F is freezing. 20s are bitter cold.\n" +
@@ -564,7 +623,90 @@ currentVoice = OPERATOR_VOICES[
 ];
 
   try {
-    await speak("Operator! How may I help you?"); // ← initial answer
+
+// GREETING — exactly once, before first listen
+if (!call.greeted) {
+  call.greeted = true;
+
+if (activeService === "WEATHER") {
+  currentVoice = VOICES.weather;
+
+  const report = await getWeatherReport(DEFAULT_WEATHER_CITY);
+  if (report) {
+    const spoken = await narrateWeather(openai, report);
+    await speak(spoken);
+  } else {
+    await speak("Weather service is temporarily unavailable.");
+  }
+
+  await speak("Remember folks, if you don't like the weather, wait five minutes. Good-bye.");
+  return;
+}
+
+if (activeService === "PRAYER") {
+  currentVoice = VOICES.prayer;
+  await speak(await tellPrayer(openai));
+  await speak("Remember folks, if you don't pray in my school, I won't think in your church. Good-Bye.");
+  return;
+}
+
+if (activeService === "JOKE") {
+  currentVoice = VOICES.joke;
+  await speak(await tellJoke(openai));
+  await speak("Good-bye.");
+  return;
+}
+
+if (activeService === "TIME") {
+  currentVoice = VOICES.time;
+  await speak(`At the tone, the time will be ${getTime()}...BEEEP!`);
+  await speak("Goodbye.");
+  return;
+}
+
+if (activeService === "STORY") {
+  currentVoice = VOICES.story;
+  await speak(await tellStory(openai));
+  await speak("That's all for tonight. Good-bye.");
+  return;
+}
+
+if (activeService === "HOROSCOPE") {
+  currentVoice = VOICES.horoscope;
+  await speak(await tellHoroscope(openai));
+  await speak("The stars have spoken. Good-bye.");
+  return;
+}
+
+  if (activeService === "OPERATOR") {
+    currentVoice = operatorVoice;
+    await speak("Operator. How may I help you?");
+  }
+
+  if (activeService === "SCIENCE") {
+    currentVoice = VOICES.science;
+    const opener = await answerScience(openai, "", "No prior conversation.");
+    await speak(opener);
+    addTurn("[science opener]", opener);
+  }
+
+if (activeService === "COMPLAINTS") {
+  currentVoice = VOICES.complaints;
+  const opener = "Complaints department. What seems to be the problem?";
+  await speak(opener);
+  addTurn("[complaints opener]", opener);
+}
+
+if (activeService === "DIRECTORY") {
+  currentVoice = operatorVoice;
+  const opener = "Directory assistance. Whom would you like to reach?";
+  await speak(opener);
+  addTurn("[directory opener]", opener);
+}
+
+}
+
+
     while (true) {
 
       const heardRaw = await streamTranscribe();
@@ -575,6 +717,13 @@ if (HANGUP_RE.test(heardRaw)) {
   await speak("Alright. Goodbye.");
   activeService = null;
   break; // END CALL — nothing else runs
+}
+
+if (activeService === "COMPLAINTS") {
+  const reply = await answerComplaintDepartment(openai, heardRaw, buildContext());
+  await speak(reply);
+  addTurn(heardRaw, reply);
+  continue;
 }
 
 if (activeService === "SCIENCE") {
@@ -664,6 +813,16 @@ if (activeService === "DIRECTORY") {
         await speak("Catch you later.");
         break;
       }
+
+      if (intent.action === "SERVICE_COMPLAINTS" && intent.confidence > 0.6) {
+        activeService = "COMPLAINTS";
+        currentVoice = VOICES.complaints;
+const reply = await answerComplaintDepartment(openai, heardRaw, buildContext());
+        await speak(reply);
+        addTurn(heardRaw, reply);
+  continue;
+      }
+
 
       if (intent.action === "SERVICE_STORY" && intent.confidence > 0.6) {
         currentVoice = VOICES.story;
