@@ -9,7 +9,9 @@ const http = require("http");
 const fs = require("fs");
 const mic = require("mic");
 const OpenAI = require("openai");
-const { exec } = require("child_process");
+const {
+    exec
+} = require("child_process");
 const crypto = require("crypto");
 const HANGUP_RE = /\b(bye|goodbye|hang up|get off|gotta go|have to go|see you)\b/i;
 
@@ -81,24 +83,39 @@ function randomOperatorVoice() {
 
 handlers.handleLoopTurn = async (service, heardRaw) => {
   const svc = SERVICES[service];
-  if (!svc?.onTurn) return false;
+  if (!svc || svc.type !== "loop") return false;
 
-  let reply;
+  // Robust: prefer explicit config, but fall back to service name.
+  const mode = (svc.onTurn || service || "").toString().toLowerCase();
 
-  if (svc.onTurn === "science") {
+  let reply = "";
+
+  if (mode.includes("science")) {
     reply = await answerScience(openai, heardRaw, buildContext());
-  } else if (svc.onTurn === "complaints") {
+  } else if (mode.includes("complaints")) {
     reply = await answerComplaintDepartment(openai, heardRaw, buildContext());
-  } else if (svc.onTurn === "directory") {
+  } else if (mode.includes("directory")) {
     reply = await directoryResponse(openai, heardRaw);
+  } else if (service === "OPERATOR") {
+    // Operator is handled elsewhere (operatorChat), but keep safe.
+    return false;
+  } else {
+    // Unknown loop service: fail safely (don’t black-hole)
+    return false;
   }
 
-  if (!reply) return false;
+  reply = (reply || "").trim();
+  if (!reply) {
+    // Fail safe: avoid “silent loop”
+    await speak("Sorry—say that again?");
+    return true;
+  }
 
   await speak(reply);
   addTurn(heardRaw, reply);
   return true;
 };
+
 
 const url = require("url");
 
@@ -331,8 +348,7 @@ async function routeIntentMasked(heardRaw) {
         });
 
         return JSON.parse(r.output_text || "{}");
-    } finally {
-    }
+    } finally {}
 }
 
 // =====================================================
@@ -363,8 +379,7 @@ async function operatorChat(heardRaw) {
             .trim();
         await speak(reply);
         addTurn(heardRaw, reply);
-    } finally {
-    }
+    } finally {}
 }
 
 let audioQueue = Promise.resolve();
@@ -679,75 +694,83 @@ async function runCall() {
     try {
 
         // GREETING — exactly once, before first listen
-if (!call.greeted) {
-  call.greeted = true;
+        if (!call.greeted) {
+            call.greeted = true;
 
-  const svc = SERVICES[activeService];
-  if (!svc) return;
+            const svc = SERVICES[activeService];
+            if (!svc) return;
 
-  // Set voice
-  if (svc.voice === "operator") {
-    currentVoice = operatorVoice;
-  } else {
-    currentVoice = svc.voice;
-  }
-
-  // ONE-SHOT SERVICES
-  if (svc.type === "oneshot") {
-    await handlers[svc.handler]();
-    return;
-  }
-
-  // LOOP SERVICES
-  if (svc.type === "loop") {
-    await handlers.handleOpener(activeService);
-  }
-}
-
-        while (true) {
-
-            const heardRaw = await streamTranscribe();
-            log("HEARD:", heardRaw);
-
-            if (HANGUP_RE.test(heardRaw)) {
-                await speak("Alright. Goodbye.");
-                activeService = null;
-                break; // END CALL — nothing else runs
+            // Set voice
+            if (svc.voice === "operator") {
+                currentVoice = operatorVoice;
+            } else {
+                currentVoice = svc.voice;
             }
 
-            // If we asked for a location, treat the next utterance as the location (ignore intent routing)
-            if (awaitingWeatherLocation) {
-                awaitingWeatherLocation = false;
-                const city = heardRaw.trim() || DEFAULT_WEATHER_CITY;
-
-                const report = await getWeatherReport(city);
-                if (!report) {
-                    await speak("I couldn't find that location. Try saying the city and state.");
-                    awaitingWeatherLocation = true;
-                    continue;
-                }
-
-                await speak(report);
-                await speak("Enjoy your day! Thanks for calling.");
-                break;
+            // ONE-SHOT SERVICES
+            if (svc.type === "oneshot") {
+                await handlers[svc.handler]();
+                return;
             }
 
-            if (!heardRaw) {
-                await speak("Are you still there?");
-                continue;
+            // LOOP SERVICES
+            if (svc.type === "loop") {
+                await handlers.handleOpener(activeService);
             }
+        }
 
+while (true) {
+
+  const heardRaw = await streamTranscribe();
+  log("HEARD:", heardRaw);
+
+  // 1. Hard hangup
+  if (HANGUP_RE.test(heardRaw)) {
+    await speak("Alright. Goodbye.");
+    activeService = null;
+    break;
+  }
+
+  // 2. Weather follow-up special case
+  if (awaitingWeatherLocation) {
+    awaitingWeatherLocation = false;
+    const city = heardRaw.trim() || DEFAULT_WEATHER_CITY;
+
+    const report = await getWeatherReport(city);
+    if (!report) {
+      await speak("I couldn't find that location. Try saying the city and state.");
+      awaitingWeatherLocation = true;
+      continue;
+    }
+
+    await speak(report);
+    await speak("Enjoy your day! Thanks for calling.");
+    break;
+  }
+
+  // 3. Silence
+  if (!heardRaw) {
+    await speak("Are you still there?");
+    continue;
+  }
+
+  // 4. ACTIVE LOOP SERVICE ALWAYS GETS FIRST SHOT
   if (await handlers.handleLoopTurn(activeService, heardRaw)) {
     continue;
   }
 
-if (heardRaw.length < 2) {
-  await operatorChat(heardRaw);
-  continue;
-}
+  // 5. Very short utterances → operator nudge
+  if (heardRaw.length < 2) {
+    await operatorChat(heardRaw);
+    continue;
+  }
 
-            const intent = await routeIntentMasked(heardRaw);
-            log("INTENT:", intent);
+  // 6. Intent routing (ONLY for switching services)
+  const intent = await routeIntentMasked(heardRaw);
+  log("INTENT:", intent);
+
+  const isLoopService = (svc) =>
+    SERVICES[svc]?.type === "loop";
 
 // Generic intent → service dispatch
 if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
@@ -755,30 +778,42 @@ if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
   const svc = SERVICES[nextService];
 
   if (svc) {
-    activeService = nextService;
-
-    // Set voice
-    currentVoice = svc.voice === "operator"
-      ? operatorVoice
-      : svc.voice;
-
-    // One-shot service
-    if (svc.type === "oneshot") {
-      await handlers[svc.handler]();
-      break;
+    // If intent says the SAME loop service we're already in,
+    // do NOT restart/open it—just handle the turn inside the loop service.
+    if (nextService === activeService && svc.type === "loop") {
+      await handlers.handleLoopTurn(activeService, heardRaw);
+      continue;
     }
 
-    // Loop service
-    if (svc.type === "loop") {
-      await handlers.handleOpener(nextService);
-      continue;
+    // If we're in a loop service, don't let OPERATOR steal the call
+    if (SERVICES[activeService]?.type === "loop" && nextService === "OPERATOR") {
+      // ignore OPERATOR switch while in a loop service
+    } else {
+      activeService = nextService;
+
+      currentVoice = (svc.voice === "operator") ? operatorVoice : svc.voice;
+
+      if (svc.type === "oneshot") {
+        await handlers[svc.handler]();
+        break;
+      }
+
+      if (svc.type === "loop") {
+        await handlers.handleOpener(nextService);
+        continue;
+      }
     }
   }
 }
 
-            // Default
-            await operatorChat(heardRaw);
-        }
-    } finally {
-    }
+  // 7. Final fallback: operator chat
+
+if (SERVICES[activeService]?.type === "loop") {
+  // Stay silent or let the loop service handle next turn
+  continue;
+}
+
+  await operatorChat(heardRaw);
+}
+    } finally {}
 }
