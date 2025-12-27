@@ -285,8 +285,15 @@ cleanupTTS();
 // =====================================================
 // AUDIO: TTS (WAV only)
 // =====================================================
+
+function cleanForSpeech(text) {
+  return (text || "")
+    .replace(/^\s*operator:\s*/i, "")
+    .trim();
+}
+
 async function speak(text) {
-    const s = (text || "").trim();
+    const s = cleanForSpeech(text);
     if (!s) return;
 
     const fname = `tts-${call.id}-${Date.now()}.wav`;
@@ -529,13 +536,14 @@ After each story segment:
   - We Follow Ellison or - We Stop and Search for hidden secrets
 
 Rules:
-- The caller may reply with whatever they like.
+- The caller may reply with whatever they like. If it makes no sense, you ignore it.
 - You MUST continue the story based on their reply.
 - Never explain rules.
 - Never list more than 3 choices.
 - Keep everything playful, safe, and fast.
+- Always emphasize their smarts, loyalty, love and the Tayler family spirit.
 
-Characters:
+Characters are friends and siblings a loyal family:
 - Jesse (boy) thinks.
 - Paraskevi (girl) sings.
 - Ellison (boy) solves puzzles.
