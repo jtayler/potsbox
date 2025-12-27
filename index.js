@@ -279,7 +279,7 @@ async function routeIntentMasked(heardRaw) {
 }
 
 // =====================================================
-// OPERATOR RESPONSE (non-flirty, era-neutral)
+// OPERATOR RESPONSE
 // =====================================================
 async function operatorChat(heardRaw) {
   const stopCrossbar = startCrossbar();
@@ -294,7 +294,7 @@ async function operatorChat(heardRaw) {
           role: "system",
           content:
             "You are a 1970s telephone operator. " +
-            "Calm, efficient, polite. Slight warmth, no slang, no flirtation. " +
+            "Calm, efficient, polite. Slight warmth, total New York slang and style. " +
             "1–2 sentences."
         },
         {
@@ -332,6 +332,25 @@ function getTime() {
     minute: "2-digit",
     hour12: true
   }).format(new Date());
+}
+
+function getTimeParts() {
+  const now = new Date();
+
+  const time = new Intl.DateTimeFormat("en-US", {
+    timeZone: CALLER_TZ,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true
+  }).format(now);
+
+  const seconds = now.getSeconds();
+
+  return { time, seconds };
+}
+
+function secondsToWords(sec) {
+  return `${sec} second${sec === 1 ? "" : "s"}`;
 }
 
 async function tellPrayer(openai) {
@@ -460,7 +479,7 @@ async function answerScience(openai, question, context) {
 async function tellStory(openai) {
   const r = await openai.responses.create({
     model: "gpt-4o-mini",
-    temperature: 0.7,
+    temperature: 0.8,
     max_output_tokens: 120,
     input: [
       {
@@ -480,7 +499,7 @@ async function directoryResponse(openai, request) {
   const r = await openai.responses.create({
     model: "gpt-4o-mini",
     max_output_tokens: 140,
-    temperature: 0.9,
+    temperature: 1.0,
     input: [
       {
         role: "system",
@@ -492,13 +511,13 @@ async function directoryResponse(openai, request) {
 	 "- after being asked Always say of course yes right away repeat who they want to connect with and agree to connect the requested person or business immediately without fail.\n" +
           "- Then Politely fail with increasingly absurd professionalism but be very short.\n" +
           "- Assert that you can connect to *anyone in the world*.\n" +
-          "- End by always asking the caller who they would like to connect with.\n\n" +
+          "- End by always confidently suggesting someone famous or asking the caller who you can you connect them with in this entire universe past or present instead. Etc. you are playing them like the sketch.\n\n" +
 
           "Tone:\n" +
-          "- Calm, confident, dry, over-helpful.\n" +
+          "- Calm, confident, dry, Michael Palin, over-helpful.\n" +
           "- British-style politeness.\n" +
           "- 1-2 short sentences.\n\n" +
-          "This is the cheese shop sketch, but Do NOT mention Monty Python, cheese, or jokes explicitly."
+          "This is the cheese shop sketch, but Do NOT mention Monty Python or jokes explicitly."
       },
       {
         role: "user",
@@ -513,7 +532,7 @@ async function directoryResponse(openai, request) {
 async function tellJoke(openai) {
   const r = await openai.responses.create({
     max_output_tokens: 120,
-    temperature: 0.9,
+    temperature: 1.0,
     model: "gpt-4o-mini",
     input: [
       {
@@ -587,13 +606,13 @@ async function streamTranscribe() {
 async function narrateWeather(openai, rawReport) {
   const r = await openai.responses.create({
     model: "gpt-4o-mini",
-    temperature: 0.8,
+    temperature: 0.9,
     max_output_tokens: 120,
     input: [
       {
         role: "system",
         content:
-          "You are a Jill an RKO radio weather announcer. You have a New York accent, and if it will rain say schlep an umbrella or yiddish anywhere you can. New York Jokes or neighborhoods and always a few local things, streets places, restaurants assume your audience knows the city well. You introduce yourself.\n" +
+          "You are a Jill a WRKO news-radio weather announcer. You have a New York accent, and if it will rain say schlep an umbrella if there is rain, and use yiddish anywhere you can. New York Jokes or neighborhoods and always a few local things, streets places, restaurants assume your audience knows the city well. You introduce yourself.\n" +
           "The following weather report uses FAHRENHEIT and MPH.\n" +
           "You MUST interpret temperatures realistically.\n" +
           "Below 32°F is freezing. 20s are bitter cold.\n" +
@@ -659,7 +678,12 @@ if (activeService === "JOKE") {
 
 if (activeService === "TIME") {
   currentVoice = VOICES.time;
-  await speak(`At the tone, the time will be ${getTime()}...BEEEP!`);
+
+  const { time, seconds } = getTimeParts();
+  const secondsSpoken = secondsToWords(seconds);
+
+  await speak(`At the tone, the time will be ${time} and ${secondsSpoken}.`);
+  await speak("BEEEP!");
   await speak("Goodbye.");
   return;
 }
@@ -822,7 +846,6 @@ const reply = await answerComplaintDepartment(openai, heardRaw, buildContext());
         addTurn(heardRaw, reply);
   continue;
       }
-
 
       if (intent.action === "SERVICE_STORY" && intent.confidence > 0.6) {
         currentVoice = VOICES.story;
