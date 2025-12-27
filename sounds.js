@@ -13,21 +13,6 @@ function enqueueAudio(fn) {
   return audioQueue;
 }
 
-// Function to play crossbar sound (for latency masking)
-function startCrossbar() {
-  let child;
-
-  enqueueAudio(async () => {
-    child = spawn("afplay", [CROSSBAR_FILE], { stdio: "ignore" });
-  });
-
-  return () => {
-    enqueueAudio(async () => {
-      try { child && child.kill("SIGKILL"); } catch {} 
-    });
-  };
-}
-
 // Function to handle text-to-speech (TTS) and play audio using afplay
 async function speak(text, openai, voice = VOICES.operator) {
   const s = (text || "").trim();
@@ -49,7 +34,6 @@ async function speak(text, openai, voice = VOICES.operator) {
 }
 
 module.exports = {
-  startCrossbar,
   speak,
   enqueueAudio
 };

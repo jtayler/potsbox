@@ -5,6 +5,7 @@ const SERVICES = require("./services");
 
 const WebSocket = require("ws");
 const http = require("http");
+const wantsAstrisk = true;
 
 const fs = require("fs");
 const mic = require("mic");
@@ -103,10 +104,7 @@ handlers.handleLoopTurn = async (service, heardRaw) => {
     reply = await answerComplaintDepartment(openai, heardRaw, buildContext());
   } else if (mode.includes("directory")) {
     reply = await directoryResponse(openai, heardRaw);
-  } else if (service === "OPERATOR") {
-    // Operator is handled elsewhere (operatorChat), but keep safe.
-    return false;
-  }   else if (svc.onTurn === "story") {
+  } else if (svc.onTurn === "story") {
     reply = await answerStory(openai, heardRaw, buildContext());
   }
 else {
@@ -293,33 +291,32 @@ function cleanForSpeech(text) {
 }
 
 async function speak(text) {
-    const s = cleanForSpeech(text);
-    if (!s) return;
+  const s = cleanForSpeech(text);
+  if (!s) return;
 
-    const fname = `tts-${call.id}-${Date.now()}.wav`;
-    const outPath = `asterisk-sounds/tts/${fname}`;
+const fname = "tts-last.wav";
+const outPath = "asterisk-sounds/tts/tts-last.wav";
 
-    log("TTS:", s, "→", fname);
+log("TTS:", s, "→", fname);
 
-    return enqueueAudio(async () => {
-        const speech = await openai.audio.speech.create({
-            model: "gpt-4o-mini-tts",
-            voice: currentVoice,
-            input: s,
-            format: "wav"
-        });
-
-        const buf = Buffer.from(await speech.arrayBuffer());
-        fs.writeFileSync(outPath, buf);
-
-        // 🔊 LOCAL SPEAKER (keep this until phone arrives)
-        await new Promise(r => exec(`afplay "${outPath}"`, r));
-
-        log("READY FOR ASTERISK PLAYBACK:", `custom/tts/${fname}`);
-        setTimeout(() => {
-            fs.unlink(outPath, () => {});
-        }, 60_000); // 60s is plenty
+  return enqueueAudio(async () => {
+    const speech = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice: currentVoice,
+      input: s,
+      format: "wav"
     });
+
+    const buf = Buffer.from(await speech.arrayBuffer());
+    fs.writeFileSync(outPath, buf);
+
+    // ONLY play locally when NOT using Asterisk
+    if (!wantsAstrisk) {
+      await new Promise(r => exec(`afplay "${outPath}"`, r));
+    }
+
+    log("READY FOR ASTERISK PLAYBACK:", `custom/tts/${fname}`);
+  });
 }
 
 // =====================================================
@@ -657,6 +654,15 @@ async function tellJoke(openai) {
     return (r.output_text || "").trim();
 }
 
+async function transcribeFromFile(path) {
+  const file = fs.createReadStream(path);
+  const stt = await openai.audio.transcriptions.create({
+    file,
+    model: "gpt-4o-mini-transcribe"
+  });
+  return (stt.text || "").trim();
+}
+
 async function streamTranscribe() {
     // Record a short utterance into memory (no files), stop on silence
     const wavBuffer = await new Promise((resolve) => {
@@ -784,16 +790,22 @@ async function runCall() {
             }
         }
 
-while (true) {
 
-  const heardRaw = await streamTranscribe();
+
+  let heardRaw;
+if (wantsAstrisk) {
+  heardRaw = await transcribeFromFile("/tmp/input.wav");
+} else {
+  heardRaw = await streamTranscribe();
+}
+
   log("HEARD:", heardRaw);
 
   // 1. Hard hangup
   if (HANGUP_RE.test(heardRaw)) {
     await speak("Alright. Goodbye.");
     activeService = null;
-    break;
+    return;
   }
 
   // 2. Weather follow-up special case
@@ -805,37 +817,34 @@ while (true) {
     if (!report) {
       await speak("I couldn't find that location. Try saying the city and state.");
       awaitingWeatherLocation = true;
-      continue;
+      return;
     }
 
     await speak(report);
     await speak("Enjoy your day! Thanks for calling.");
-    break;
+    return;
   }
 
   // 3. Silence
   if (!heardRaw) {
     await speak("Are you still there?");
-    continue;
+    return;
   }
 
   // 4. ACTIVE LOOP SERVICE ALWAYS GETS FIRST SHOT
   if (await handlers.handleLoopTurn(activeService, heardRaw)) {
-    continue;
+    return;
   }
 
   // 5. Very short utterances → operator nudge
   if (heardRaw.length < 2) {
     await operatorChat(heardRaw);
-    continue;
+    return;
   }
 
   // 6. Intent routing (ONLY for switching services)
   const intent = await routeIntentMasked(heardRaw);
   log("INTENT:", intent);
-
-  const isLoopService = (svc) =>
-    SERVICES[svc]?.type === "loop";
 
 // Generic intent → service dispatch
 if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
@@ -847,7 +856,7 @@ if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
     // do NOT restart/open it—just handle the turn inside the loop service.
     if (nextService === activeService && svc.type === "loop") {
       await handlers.handleLoopTurn(activeService, heardRaw);
-      continue;
+      return;
     }
 
     // If we're in a loop service, don't let OPERATOR steal the call
@@ -860,22 +869,22 @@ if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
 
       if (svc.type === "oneshot") {
         await handlers[svc.handler]();
-        break;
+        return;
       }
 
       if (svc.type === "loop") {
         await handlers.handleOpener(nextService);
-        continue;
+        return;
       }
     }
   }
-}
+
 
   // 7. Final fallback: operator chat
 
 if (SERVICES[activeService]?.type === "loop") {
   // Stay silent or let the loop service handle next turn
-  continue;
+  return;
 }
 
   await operatorChat(heardRaw);
