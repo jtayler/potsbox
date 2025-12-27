@@ -66,12 +66,12 @@ const handlers = {
             return;
         }
 
-  if (service === "STORY") {
-    const opener = await answerStory(openai, "", "No prior conversation.");
-    await speak(opener);
-    addTurn("[story opener]", opener);
-    return;
-  }
+        if (service === "STORY") {
+            const opener = await answerStory(openai, "", "No prior conversation.");
+            await speak(opener);
+            addTurn("[story opener]", opener);
+            return;
+        }
 
         const svc = SERVICES[service];
         if (svc?.opener) {
@@ -90,38 +90,37 @@ function randomOperatorVoice() {
 }
 
 handlers.handleLoopTurn = async (service, heardRaw) => {
-  const svc = SERVICES[service];
-  if (!svc || svc.type !== "loop") return false;
+    const svc = SERVICES[service];
+    if (!svc || svc.type !== "loop") return false;
 
-  // Robust: prefer explicit config, but fall back to service name.
-  const mode = (svc.onTurn || service || "").toString().toLowerCase();
+    // Robust: prefer explicit config, but fall back to service name.
+    const mode = (svc.onTurn || service || "").toString().toLowerCase();
 
-  let reply = "";
+    let reply = "";
 
-  if (mode.includes("science")) {
-    reply = await answerScience(openai, heardRaw, buildContext());
-  } else if (mode.includes("complaints")) {
-    reply = await answerComplaintDepartment(openai, heardRaw, buildContext());
-  } else if (mode.includes("directory")) {
-    reply = await directoryResponse(openai, heardRaw);
-  } else if (svc.onTurn === "story") {
-    reply = await answerStory(openai, heardRaw, buildContext());
-  }
-else {
-    // Unknown loop service: fail safely (don’t black-hole)
-    return false;
-  }
+    if (mode.includes("science")) {
+        reply = await answerScience(openai, heardRaw, buildContext());
+    } else if (mode.includes("complaints")) {
+        reply = await answerComplaintDepartment(openai, heardRaw, buildContext());
+    } else if (mode.includes("directory")) {
+        reply = await directoryResponse(openai, heardRaw);
+    } else if (svc.onTurn === "story") {
+        reply = await answerStory(openai, heardRaw, buildContext());
+    } else {
+        // Unknown loop service: fail safely (don’t black-hole)
+        return false;
+    }
 
-  reply = (reply || "").trim();
-  if (!reply) {
-    // Fail safe: avoid “silent loop”
-    await speak("Sorry—say that again?");
+    reply = (reply || "").trim();
+    if (!reply) {
+        // Fail safe: avoid “silent loop”
+        await speak("Sorry—say that again?");
+        return true;
+    }
+
+    await speak(reply);
+    addTurn(heardRaw, reply);
     return true;
-  }
-
-  await speak(reply);
-  addTurn(heardRaw, reply);
-  return true;
 };
 
 
@@ -285,38 +284,38 @@ cleanupTTS();
 // =====================================================
 
 function cleanForSpeech(text) {
-  return (text || "")
-    .replace(/^\s*operator:\s*/i, "")
-    .trim();
+    return (text || "")
+        .replace(/^\s*operator:\s*/i, "")
+        .trim();
 }
 
 async function speak(text) {
-  const s = cleanForSpeech(text);
-  if (!s) return;
+    const s = cleanForSpeech(text);
+    if (!s) return;
 
-const fname = "tts-last.wav";
-const outPath = "asterisk-sounds/tts/tts-last.wav";
+    const fname = "tts-last.wav";
+    const outPath = "asterisk-sounds/tts/tts-last.wav";
 
-log("TTS:", s, "→", fname);
+    log("TTS:", s, "→", fname);
 
-  return enqueueAudio(async () => {
-    const speech = await openai.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: currentVoice,
-      input: s,
-      format: "wav"
+    return enqueueAudio(async () => {
+        const speech = await openai.audio.speech.create({
+            model: "gpt-4o-mini-tts",
+            voice: currentVoice,
+            input: s,
+            format: "wav"
+        });
+
+        const buf = Buffer.from(await speech.arrayBuffer());
+        fs.writeFileSync(outPath, buf);
+
+        // ONLY play locally when NOT using Asterisk
+        if (!wantsAstrisk) {
+            await new Promise(r => exec(`afplay "${outPath}"`, r));
+        }
+
+        log("READY FOR ASTERISK PLAYBACK:", `custom/tts/${fname}`);
     });
-
-    const buf = Buffer.from(await speech.arrayBuffer());
-    fs.writeFileSync(outPath, buf);
-
-    // ONLY play locally when NOT using Asterisk
-    if (!wantsAstrisk) {
-      await new Promise(r => exec(`afplay "${outPath}"`, r));
-    }
-
-    log("READY FOR ASTERISK PLAYBACK:", `custom/tts/${fname}`);
-  });
 }
 
 // =====================================================
@@ -515,15 +514,13 @@ async function answerComplaintDepartment(openai, question, context) {
 }
 
 async function answerStory(openai, question, context) {
-  const r = await openai.responses.create({
-    model: "gpt-4o-mini",
-    temperature: 0.7,
-    max_output_tokens: 140,
-    input: [
-      {
-        role: "system",
-        content:
-`You are Story Line on a public telephone.
+    const r = await openai.responses.create({
+        model: "gpt-4o-mini",
+        temperature: 0.7,
+        max_output_tokens: 140,
+        input: [{
+                role: "system",
+                content: `You are Story Line on a public telephone.
 
 You tell a short children's adventure story about 3–5 sentences.
 
@@ -546,20 +543,19 @@ Characters are friends and siblings a loyal family:
 - Ellison (boy) solves puzzles.
 - Remy (boy) jokes and rhymes.
 `
-      },
-      {
-        role: "user",
-        content:
-`Conversation so far:
+            },
+            {
+                role: "user",
+                content: `Conversation so far:
 ${context}
 
 Caller says:
 ${question}`
-      }
-    ]
-  });
+            }
+        ]
+    });
 
-  return (r.output_text || "").trim();
+    return (r.output_text || "").trim();
 }
 
 async function answerScience(openai, question, context) {
@@ -655,12 +651,12 @@ async function tellJoke(openai) {
 }
 
 async function transcribeFromFile(path) {
-  const file = fs.createReadStream(path);
-  const stt = await openai.audio.transcriptions.create({
-    file,
-    model: "gpt-4o-mini-transcribe"
-  });
-  return (stt.text || "").trim();
+    const file = fs.createReadStream(path);
+    const stt = await openai.audio.transcriptions.create({
+        file,
+        model: "gpt-4o-mini-transcribe"
+    });
+    return (stt.text || "").trim();
 }
 
 async function streamTranscribe() {
@@ -792,102 +788,102 @@ async function runCall() {
 
 
 
-  let heardRaw;
-if (wantsAstrisk) {
-  heardRaw = await transcribeFromFile("/tmp/input.wav");
-} else {
-  heardRaw = await streamTranscribe();
-}
+        let heardRaw;
+        if (wantsAstrisk) {
+            heardRaw = await transcribeFromFile("/tmp/input.wav");
+        } else {
+            heardRaw = await streamTranscribe();
+        }
 
-  log("HEARD:", heardRaw);
+        log("HEARD:", heardRaw);
 
-  // 1. Hard hangup
-  if (HANGUP_RE.test(heardRaw)) {
-    await speak("Alright. Goodbye.");
-    activeService = null;
-    return;
-  }
+        // 1. Hard hangup
+        if (HANGUP_RE.test(heardRaw)) {
+            await speak("Alright. Goodbye.");
+            activeService = null;
+            return;
+        }
 
-  // 2. Weather follow-up special case
-  if (awaitingWeatherLocation) {
-    awaitingWeatherLocation = false;
-    const city = heardRaw.trim() || DEFAULT_WEATHER_CITY;
+        // 2. Weather follow-up special case
+        if (awaitingWeatherLocation) {
+            awaitingWeatherLocation = false;
+            const city = heardRaw.trim() || DEFAULT_WEATHER_CITY;
 
-    const report = await getWeatherReport(city);
-    if (!report) {
-      await speak("I couldn't find that location. Try saying the city and state.");
-      awaitingWeatherLocation = true;
-      return;
-    }
+            const report = await getWeatherReport(city);
+            if (!report) {
+                await speak("I couldn't find that location. Try saying the city and state.");
+                awaitingWeatherLocation = true;
+                return;
+            }
 
-    await speak(report);
-    await speak("Enjoy your day! Thanks for calling.");
-    return;
-  }
+            await speak(report);
+            await speak("Enjoy your day! Thanks for calling.");
+            return;
+        }
 
-  // 3. Silence
-  if (!heardRaw) {
-    await speak("Are you still there?");
-    return;
-  }
+        // 3. Silence
+        if (!heardRaw) {
+            await speak("Are you still there?");
+            return;
+        }
 
-  // 4. ACTIVE LOOP SERVICE ALWAYS GETS FIRST SHOT
-  if (await handlers.handleLoopTurn(activeService, heardRaw)) {
-    return;
-  }
+        // 4. ACTIVE LOOP SERVICE ALWAYS GETS FIRST SHOT
+        if (await handlers.handleLoopTurn(activeService, heardRaw)) {
+            return;
+        }
 
-  // 5. Very short utterances → operator nudge
-  if (heardRaw.length < 2) {
-    await operatorChat(heardRaw);
-    return;
-  }
+        // 5. Very short utterances → operator nudge
+        if (heardRaw.length < 2) {
+            await operatorChat(heardRaw);
+            return;
+        }
 
-  // 6. Intent routing (ONLY for switching services)
-  const intent = await routeIntentMasked(heardRaw);
-  log("INTENT:", intent);
+        // 6. Intent routing (ONLY for switching services)
+        const intent = await routeIntentMasked(heardRaw);
+        log("INTENT:", intent);
 
-// Generic intent → service dispatch
-if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
-  const nextService = intent.action.replace("SERVICE_", "");
-  const svc = SERVICES[nextService];
+        // Generic intent → service dispatch
+        if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
+            const nextService = intent.action.replace("SERVICE_", "");
+            const svc = SERVICES[nextService];
 
-  if (svc) {
-    // If intent says the SAME loop service we're already in,
-    // do NOT restart/open it—just handle the turn inside the loop service.
-    if (nextService === activeService && svc.type === "loop") {
-      await handlers.handleLoopTurn(activeService, heardRaw);
-      return;
-    }
+            if (svc) {
+                // If intent says the SAME loop service we're already in,
+                // do NOT restart/open it—just handle the turn inside the loop service.
+                if (nextService === activeService && svc.type === "loop") {
+                    await handlers.handleLoopTurn(activeService, heardRaw);
+                    return;
+                }
 
-    // If we're in a loop service, don't let OPERATOR steal the call
-    if (SERVICES[activeService]?.type === "loop" && nextService === "OPERATOR") {
-      // ignore OPERATOR switch while in a loop service
-    } else {
-      activeService = nextService;
+                // If we're in a loop service, don't let OPERATOR steal the call
+                if (SERVICES[activeService]?.type === "loop" && nextService === "OPERATOR") {
+                    // ignore OPERATOR switch while in a loop service
+                } else {
+                    activeService = nextService;
 
-      currentVoice = (svc.voice === "operator") ? operatorVoice : svc.voice;
+                    currentVoice = (svc.voice === "operator") ? operatorVoice : svc.voice;
 
-      if (svc.type === "oneshot") {
-        await handlers[svc.handler]();
-        return;
-      }
+                    if (svc.type === "oneshot") {
+                        await handlers[svc.handler]();
+                        return;
+                    }
 
-      if (svc.type === "loop") {
-        await handlers.handleOpener(nextService);
-        return;
-      }
-    }
-  }
+                    if (svc.type === "loop") {
+                        await handlers.handleOpener(nextService);
+                        return;
+                    }
+                }
+            }
 
 
-  // 7. Final fallback: operator chat
+            // 7. Final fallback: operator chat
 
-if (SERVICES[activeService]?.type === "loop") {
-  // Stay silent or let the loop service handle next turn
-  return;
-}
+            if (SERVICES[activeService]?.type === "loop") {
+                // Stay silent or let the loop service handle next turn
+                return;
+            }
 
-  await operatorChat(heardRaw);
-}
+            await operatorChat(heardRaw);
+        }
     } finally {}
 }
