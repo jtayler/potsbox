@@ -64,11 +64,12 @@ DIRECTORY: {
     handler: "handleHoroscope"
   },
 
-  STORY: {
-    type: "oneshot",
-    voice: VOICES.story,
-    handler: "handleStory"
-  },
+STORY: {
+  type: "loop",
+  voice: VOICES.story,
+  opener: "Would you like to hear a story?",
+  onTurn: "story"
+},
 
   OPERATOR: {
     type: "loop",

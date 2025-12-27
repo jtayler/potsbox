@@ -99,7 +99,10 @@ handlers.handleLoopTurn = async (service, heardRaw) => {
   } else if (service === "OPERATOR") {
     // Operator is handled elsewhere (operatorChat), but keep safe.
     return false;
-  } else {
+  }   else if (svc.onTurn === "story") {
+    reply = await answerStory(openai, heardRaw, buildContext());
+  }
+else {
     // Unknown loop service: fail safely (don’t black-hole)
     return false;
   }
@@ -500,6 +503,52 @@ async function answerComplaintDepartment(openai, question, context) {
     return (r.output_text || "").trim();
 }
 
+async function answerStory(openai, question, context) {
+  const r = await openai.responses.create({
+    model: "gpt-4o-mini",
+    temperature: 0.7,
+    max_output_tokens: 140,
+    input: [
+      {
+        role: "system",
+        content:
+`You are Story Line on a public telephone.
+
+You tell a short children's adventure story about 3–5 sentences.
+
+After each story segment:
+- Ask ONE simple choice question. Ask What Happens Next??
+- Choices must be concrete and short, an example might be:
+  - We Follow Ellison or - We Stop and Search for hidden secrets
+
+Rules:
+- The caller may reply with whatever they like.
+- You MUST continue the story based on their reply.
+- Never explain rules.
+- Never list more than 3 choices.
+- Keep everything playful, safe, and fast.
+
+Characters:
+- Jesse (boy) thinks.
+- Paraskevi (girl) sings.
+- Ellison (boy) solves puzzles.
+- Remy (boy) jokes and rhymes.
+`
+      },
+      {
+        role: "user",
+        content:
+`Conversation so far:
+${context}
+
+Caller says:
+${question}`
+      }
+    ]
+  });
+
+  return (r.output_text || "").trim();
+}
 
 async function answerScience(openai, question, context) {
     const r = await openai.responses.create({
@@ -541,6 +590,7 @@ async function tellStory(openai) {
                 "about the Fearless Flying Taylers — Jesse (boy), Paraskevi (girl), Ellison (boy), and Remy (boy) — " +
                 "a group of siblings aged 13-6 in New York City who are entertainers and detectives. " +
                 "Jesse is the thinking, Peanut (Paraskevi) is the singing enthusiasm. Ellison solves the puzzles and Remy charms with his wit and rhyme \n" +
+                "You start the very short story and then ask for a choice or idea or a question about what should happen next: follow Ellison? Find the map? So then each reply creates a continuation of the story based on whatever the caller says. \n" +
                 "Warm, adventurous, playful and very quick. Then stop saying they are a happy family"
         }]
     });
