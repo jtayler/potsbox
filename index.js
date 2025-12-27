@@ -406,8 +406,8 @@ async function tellHoroscope(openai) {
         content:
           `You are Horoscopes-by-Phone, broadcasting live like a late-night AM radio show.\n` +
           `Today is ${weekday}, ${month} ${day}. The stars are parked in ${sign}.\n\n` +
-          `Deliver ONE VERY short horoscope a single sentence for ${sign}.\n` +
-          `Richard Pryor raw adult humor and energy. Confident, mischievous, a little dangerous.\n` +
+          `Deliver ONE VERY short horoscope a single sentence for ${sign} with those funny words like mars is in retrograde, kudos if you know if it is and moon positions or astrological stuff.\n` +
+          `Richard Pryor raw adult humor and energy. Confident, mischievous, a little sexy.\n` +
           `Open with the date and sign like a DJ, then hit the prediction.\n`
       }
     ]
@@ -480,15 +480,16 @@ async function tellStory(openai) {
   const r = await openai.responses.create({
     model: "gpt-4o-mini",
     temperature: 0.8,
-    max_output_tokens: 120,
+    max_output_tokens: 140,
     input: [
       {
         role: "system",
         content:
           "You are Story Line. Tell ONE short VERY SHORT children's story " +
-          "about the Fearless Flying Taylers — Jesse, Paraskevi, Ellison, and Remy — " +
-          "a group of siblings aged 6–13 in New York City who are entertainers and detectives. " +
-          "Warm, adventurous, playful and quick. Then stop saying they are a happy family"
+          "about the Fearless Flying Taylers — Jesse (boy), Paraskevi (girl), Ellison (boy), and Remy (boy) — " +
+          "a group of siblings aged 13-6 in New York City who are entertainers and detectives. " +
+          "Jesse is the thinking, Peanut (Paraskevi) is the singing enthusiasm. Ellison solves the puzzles and Remy charms with his wit and rhyme \n" +
+          "Warm, adventurous, playful and very quick. Then stop saying they are a happy family"
       }
     ]
   });
@@ -538,7 +539,7 @@ async function tellJoke(openai) {
       {
         role: "system",
         content:
-          "You are a Dial-a-Joke line. Tell ONE very short dirty adult entertaining raw and funny joke as Richard Pryor would and stop."
+          "You are a Dial-a-Joke line. Tell ONE very short dirty adult entertaining raw and funny joke as Richard Pryor would on stage and stop. Be creative and unique and different."
       }
     ]
   });
@@ -607,12 +608,12 @@ async function narrateWeather(openai, rawReport) {
   const r = await openai.responses.create({
     model: "gpt-4o-mini",
     temperature: 0.9,
-    max_output_tokens: 120,
+    max_output_tokens: 140,
     input: [
       {
         role: "system",
         content:
-          "You are a Jill a WRKO news-radio weather announcer. You have a New York accent, and if it will rain say schlep an umbrella if there is rain, and use yiddish anywhere you can. New York Jokes or neighborhoods and always a few local things, streets places, restaurants assume your audience knows the city well. You introduce yourself.\n" +
+          "You are a Jill a WRKO news-radio weather announcer. You have a New York accent, and if it will rain say schlep an umbrella if there is rain, and use yiddish anywhere you can. New York Jokes or neighborhoods and always a few local things, streets places, restaurants assume your audience knows the city well. You introduce yourself. You have only a sentence or two so it must be short.\n" +
           "The following weather report uses FAHRENHEIT and MPH.\n" +
           "You MUST interpret temperatures realistically.\n" +
           "Below 32°F is freezing. 20s are bitter cold.\n" +
@@ -691,7 +692,8 @@ if (activeService === "TIME") {
 if (activeService === "STORY") {
   currentVoice = VOICES.story;
   await speak(await tellStory(openai));
-  await speak("That's all for tonight. Good-bye.");
+  currentVoice = VOICES.story;
+  await speak("That's all for tonight. Good-night, sleep tight.");
   return;
 }
 
