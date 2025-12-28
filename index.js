@@ -6,6 +6,7 @@ const SERVICES = require("./services");
 const WebSocket = require("ws");
 const http = require("http");
 const wantsAstrisk = true;
+const path = require("path");
 
 const fs = require("fs");
 const mic = require("mic");
@@ -209,7 +210,11 @@ function buildContext() {
 // =====================================================
 
 
-http.createServer((req, res) => {
+async function waitForAudio() {
+  await audioQueue;
+}
+
+http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url.startsWith("/call/start")) {
         const {
             query
@@ -218,9 +223,7 @@ http.createServer((req, res) => {
 
         log("INCOMING CALL:", exten);
 
-        startCall({
-            exten
-        });
+await startCall({ exten });
 
         res.end("OK\n");
         return;
@@ -232,7 +235,7 @@ http.createServer((req, res) => {
     console.log("Listening on :3000");
 });
 
-function startCall({
+async function startCall({
     exten
 }) {
     const serviceByExten = {
@@ -251,7 +254,8 @@ function startCall({
     activeService = serviceByExten[exten] || "OPERATOR";
     call.history = [];
     call.greeted = false;
-    runCall().catch(console.error);
+await runCall();
+await waitForAudio();
 }
 
 // =====================================================
@@ -289,33 +293,75 @@ function cleanForSpeech(text) {
         .trim();
 }
 
+function pcm16ToWav(pcm, sampleRate = 24000) {
+  const header = Buffer.alloc(44);
+
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);  // PCM chunk
+  header.writeUInt16LE(1, 20);   // PCM format
+  header.writeUInt16LE(1, 22);   // mono
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(pcm.length, 40);
+
+  return Buffer.concat([header, pcm]);
+}
+
+async function writeWavFile(pcmData, id) {
+  const wavPath = path.join(__dirname, "asterisk-sounds", "tts", `tts-${id}.wav`);
+  const wavData = pcmToWav(pcmData);
+
+  // Writing the correct .wav file
+  fs.writeFileSync(wavPath, wavData);
+  console.log(`WAV file written to ${wavPath}`);
+  return wavPath;
+}
+
 async function speak(text) {
-    const s = cleanForSpeech(text);
-    if (!s) return;
+  const s = cleanForSpeech(text);
+  if (!s) return;
 
-    const fname = "tts-last.wav";
-    const outPath = "asterisk-sounds/tts/tts-last.wav";
+  const id = Date.now();
+  const pcmPath = path.join(__dirname, "asterisk-sounds", "tts", `tmp-tts-${id}.raw`);
+  const wavPath = path.join(__dirname, "asterisk-sounds", "tts", `tts-${id}.wav`);
 
-    log("TTS:", s, "→", fname);
+  console.log("TTS START →", wavPath);
 
-    return enqueueAudio(async () => {
-        const speech = await openai.audio.speech.create({
-            model: "gpt-4o-mini-tts",
-            voice: currentVoice,
-            input: s,
-            format: "wav"
-        });
+  const speech = await openai.audio.speech.create({
+    model: "gpt-4o-mini-tts",
+    voice: currentVoice,
+    input: s,
+    format: "pcm",
+  });
 
-        const buf = Buffer.from(await speech.arrayBuffer());
-        fs.writeFileSync(outPath, buf);
+  const raw = Buffer.from(await speech.arrayBuffer());
+  fs.writeFileSync(pcmPath, raw);
 
-        // ONLY play locally when NOT using Asterisk
-        if (!wantsAstrisk) {
-            await new Promise(r => exec(`afplay "${outPath}"`, r));
-        }
+  console.log("PCM data written to:", pcmPath);
 
-        log("READY FOR ASTERISK PLAYBACK:", `custom/tts/${fname}`);
-    });
+  // Convert the raw PCM to WAV using SoX
+  exec(
+    `sox -t raw -r 24000 -c 1 -b 16 -e signed-integer ${pcmPath} ${wavPath}`,
+    (err, stdout, stderr) => {
+      if (err) {
+        console.error("Error converting PCM to WAV:", stderr);
+        return;
+      }
+      console.log("Converted to WAV:", wavPath);
+
+      fs.appendFileSync(
+        path.join(__dirname, "asterisk-sounds", "tts", "queue.txt"),
+        `custom/tts/tts-${id}.wav\n`
+      );
+      console.log("ENQUEUED tts-", id);
+    }
+  );
 }
 
 // =====================================================
@@ -788,12 +834,7 @@ async function runCall() {
 
 
 
-        let heardRaw;
-        if (wantsAstrisk) {
-            heardRaw = await transcribeFromFile("/tmp/input.wav");
-        } else {
-            heardRaw = await streamTranscribe();
-        }
+        let heardRaw = ""; // await transcribeFromFile("./asterisk-sounds/tts/input.wav");
 
         log("HEARD:", heardRaw);
 
