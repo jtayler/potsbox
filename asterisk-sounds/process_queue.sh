@@ -1,34 +1,32 @@
-[default]
-include => ai-phone
+#!/bin/bash
 
-[ai-phone]
-exten => _X.,1,Answer()
-same => n,Set(CHANNEL(language)=en)
-same => n,NoOp(AI PHONE SERVICE ${EXTEN})
+# Set the path to the queue file and the folder where the sound files are located
+QUEUE_FILE="/var/lib/asterisk/sounds/en/queue.txt"
+SOUNDS_DIR="/var/lib/asterisk/sounds/en"
 
-; Trigger Node to process - Send whatever the user dialed
-same => n,System(curl -s -X POST http://host.docker.internal:3000/call/start?exten=${EXTEN})
+# Check if the queue file exists and is not empty
+if [[ ! -s $QUEUE_FILE ]]; then
+  echo "No files to process."
+  exit 1
+fi
 
-; Wait for Node to process and write the audio files
-same => n,Wait(1)
+# Get the list of current files in the queue
+queue_files=$(cat $QUEUE_FILE)
 
-; Run the script to process the queue using SHELL (not SYSTEM)
-same => n,SHELL(/bin/bash /var/lib/asterisk/sounds/process_queue.sh)
+# Get the next file in the queue (last line) and remove any leading/trailing whitespace
+NEXT_FILE=$(tail -n 1 $QUEUE_FILE | tr -d '[:space:]')
 
-; Get the next file to play from the queue
-same => n,Set(NEXTFILE=${SHELL(tail -n 1 /var/lib/asterisk/sounds/en/queue.txt | tr -d '[:space:]')})
-
-; If the file is empty, hang up
-same => n,GotoIf($["${NEXTFILE}"=""]?hangup)
-
-; Log the file we are about to play
-same => n,NoOp(PLAYING '${NEXTFILE}')
-
-; Play the audio file
-same => n,Playback(en/${NEXTFILE})
-
-; Remove the played file from the queue
-same => n,System(sed -i '1d' /var/lib/asterisk/sounds/en/queue.txt)
-
-; Hang up after playing the sound file
-same => n(hangup),Hangup()
+# If a file is found
+if [[ -n "$NEXT_FILE" ]]; then
+  # Remove the last line from the queue file
+  sed -i '$d' $QUEUE_FILE
+  
+  # Log the file being processed
+  echo "Processing file: $NEXT_FILE"
+  
+  # Return the file name for Asterisk's playback
+  echo "$NEXT_FILE"
+else
+  echo "No more files in the queue."
+  exit 1
+fi
