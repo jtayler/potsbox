@@ -9,4 +9,4 @@ services:
       - "5060:5060/tcp"
     volumes:
       - ./asterisk-config:/etc/asterisk
-      - ./asterisk-sounds:/var/lib/asterisk/sounds/custom
+      - ./asterisk-sounds:/var/lib/asterisk/sounds

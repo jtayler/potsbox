@@ -262,7 +262,7 @@ await waitForAudio();
 // FILES: CLEANUP AT STARTUP
 // =====================================================
 
-const TTS_DIR = "asterisk-sounds/tts";
+const TTS_DIR = "asterisk-sounds/en";
 const MAX_AGE_MS = 60 * 1000; // 60 seconds
 
 function cleanupTTS() {
@@ -328,38 +328,59 @@ async function speak(text) {
   if (!s) return;
 
   const id = Date.now();
-  const pcmPath = path.join(__dirname, "asterisk-sounds", "tts", `tmp-tts-${id}.raw`);
-  const wavPath = path.join(__dirname, "asterisk-sounds", "tts", `tts-${id}.wav`);
+
+  // Correct paths for the output sound files
+  const wavPath = path.join(__dirname, "asterisk-sounds", "en", `tts-${id}.wav`);
+  const ulawPath = path.join(__dirname, "asterisk-sounds", "en", `tts-${id}.ulaw`);
+
+  // Path for the queue file
+  const queueFilePath = path.join(__dirname, "asterisk-sounds", "en", "queue.txt");
 
   console.log("TTS START →", wavPath);
 
+  // Requesting WAV format from OpenAI
   const speech = await openai.audio.speech.create({
     model: "gpt-4o-mini-tts",
     voice: currentVoice,
     input: s,
-    format: "pcm",
+    format: "wav",  // Request WAV format from OpenAI
   });
 
-  const raw = Buffer.from(await speech.arrayBuffer());
-  fs.writeFileSync(pcmPath, raw);
+  // Ensure the data is valid
+  const wavBuffer = Buffer.from(await speech.arrayBuffer());
 
-  console.log("PCM data written to:", pcmPath);
+  // Check if wavBuffer is valid
+  if (!wavBuffer || wavBuffer.length === 0) {
+    console.error("Error: Received empty audio data from OpenAI.");
+    return;
+  }
 
-  // Convert the raw PCM to WAV using SoX
+  // Create the WAV file first
+  fs.writeFileSync(wavPath, wavBuffer);  // Save the WAV file
+  console.log("WAV data written to:", wavPath);
+
+  // Convert WAV to ULaw using FFmpeg
   exec(
-    `sox -t raw -r 24000 -c 1 -b 16 -e signed-integer ${pcmPath} ${wavPath}`,
+    `ffmpeg -i ${wavPath} -ar 8000 -ac 1 -f mulaw ${ulawPath}`,
     (err, stdout, stderr) => {
       if (err) {
-        console.error("Error converting PCM to WAV:", stderr);
+        console.error("Error converting to ulaw:", stderr);
         return;
       }
-      console.log("Converted to WAV:", wavPath);
+      console.log("Converted to ulaw:", ulawPath);
 
-      fs.appendFileSync(
-        path.join(__dirname, "asterisk-sounds", "tts", "queue.txt"),
-        `custom/tts/tts-${id}.wav\n`
-      );
-      console.log("ENQUEUED tts-", id);
+      // Check if the queue file exists, create it if not
+      if (!fs.existsSync(queueFilePath)) {
+        fs.writeFileSync(queueFilePath, '');  // Create an empty queue file if it doesn't exist
+        console.log("Created new queue.txt file.");
+      }
+
+      // File is now ready for Asterisk to play in the 'en' folder
+      console.log("File ready in the 'en' folder for Asterisk to play:", ulawPath);
+
+      // Add the converted file to the queue
+      fs.appendFileSync(queueFilePath, `tts-${id}\n`);
+      console.log("File added to queue:", `tts-${id}`);
     }
   );
 }
@@ -834,7 +855,7 @@ async function runCall() {
 
 
 
-        let heardRaw = ""; // await transcribeFromFile("./asterisk-sounds/tts/input.wav");
+        let heardRaw = ""; // await transcribeFromFile("./asterisk-sounds/en/input.wav");
 
         log("HEARD:", heardRaw);
 
