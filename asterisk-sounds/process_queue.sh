@@ -12,11 +12,11 @@ same => n,System(curl -s -X POST http://host.docker.internal:3000/call/start?ext
 ; Wait for Node to process and write the audio files
 same => n,Wait(1)
 
-; Call the external script to handle the queue (run without SYSTEM())
-same => n,System(/var/lib/asterisk/sounds/process_queue.sh)
+; Run the script to process the queue using SHELL (not SYSTEM)
+same => n,SHELL(/bin/bash /var/lib/asterisk/sounds/process_queue.sh)
 
 ; Get the next file to play from the queue
-same => n,Set(NEXTFILE=${SHELL(head -n 1 /var/lib/asterisk/sounds/en/queue.txt | tr -d '[:space:]')})
+same => n,Set(NEXTFILE=${SHELL(tail -n 1 /var/lib/asterisk/sounds/en/queue.txt | tr -d '[:space:]')})
 
 ; If the file is empty, hang up
 same => n,GotoIf($["${NEXTFILE}"=""]?hangup)
@@ -30,5 +30,5 @@ same => n,Playback(en/${NEXTFILE})
 ; Remove the played file from the queue
 same => n,System(sed -i '1d' /var/lib/asterisk/sounds/en/queue.txt)
 
-; Hangup after playing the sound file
+; Hang up after playing the sound file
 same => n(hangup),Hangup()
