@@ -246,7 +246,7 @@ async function startCall({
         "8463": "TIME",
         "9328": "WEATHER",
         "7243": "SCIENCE",
-        "7827": "HOROSCOPE",
+        "4676": "HOROSCOPE",
         "7867": "STORY",
         "9857": "JOKE",
         "4637": "PRAYER",
