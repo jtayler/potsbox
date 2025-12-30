@@ -254,6 +254,8 @@ async function startCall({
     };
 
     activeService = serviceByExten[exten] || "OPERATOR";
+    console.log("Active Service:", activeService);
+
     call.history = [];
     call.greeted = false;
 await runCall();
@@ -338,7 +340,7 @@ async function speak(text) {
   // Path for the queue file
   const queueFilePath = path.join(__dirname, "asterisk-sounds", "en", "queue.txt");
 
-  console.log("TTS START →", wavPath);
+  //console.log("TTS START →", wavPath);
 
   // Requesting WAV format from OpenAI
   const speech = await openai.audio.speech.create({
@@ -359,7 +361,7 @@ async function speak(text) {
 
   // Create the WAV file first
   fs.writeFileSync(wavPath, wavBuffer);  // Save the WAV file
-  console.log("WAV data written to:", wavPath);
+  //console.log("WAV data written to:", wavPath);
 
   // Convert WAV to ULaw using FFmpeg
   exec(
@@ -369,20 +371,20 @@ async function speak(text) {
         console.error("Error converting to ulaw:", stderr);
         return;
       }
-      console.log("Converted to ulaw:", ulawPath);
+      //console.log("Converted to ulaw:", ulawPath);
 
       // Check if the queue file exists, create it if not
       if (!fs.existsSync(queueFilePath)) {
         fs.writeFileSync(queueFilePath, '');  // Create an empty queue file if it doesn't exist
-        console.log("Created new queue.txt file.");
+        //console.log("Created new queue.txt file.");
       }
 
       // File is now ready for Asterisk to play in the 'en' folder
-      console.log("File ready in the 'en' folder for Asterisk to play:", ulawPath);
+      //console.log("File ready in the 'en' folder for Asterisk to play:", ulawPath);
 
       // Add the converted file to the queue
       fs.appendFileSync(queueFilePath, `tts-${id}\n`);
-      console.log("File added to queue:", `tts-${id}`);
+      console.log("Sound queued:", `tts-${id}`);
     }
   );
 }
