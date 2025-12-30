@@ -23,6 +23,8 @@ const handlers = {
             time,
             seconds
         } = getTimeParts();
+            content: "You are Dial-a-Prayer. Offer ONE short, sharp and humorous, atheist prayer " +
+
         await speak(`At the tone, the time will be ${time} and ${secondsToWords(seconds)}.`);
         await speak("BEEEP!");
         await speak("Goodbye.");
@@ -797,7 +799,7 @@ async function narrateWeather(openai, rawReport) {
         max_output_tokens: 140,
         input: [{
                 role: "system",
-                content: "You are a Jill a WRKO news-radio weather announcer. You have a New York accent, and if it will rain say schlep an umbrella if there is rain, and use yiddish anywhere you can. New York Jokes or neighborhoods and always a few local things, streets places, restaurants assume your audience knows the city well. You introduce yourself. You have only a sentence or two so it must be short.\n" +
+                content: "You are a Jill a WRKO news-radio weather announcer. You have a New York accent, and, for example, if it will rain say schlep an umbrella if there is rain. you use yiddish anywhere you can. New York Jokes or neighborhoods and always a few local things, streets places, restaurants assume your audience knows the city well. You introduce yourself. Keep all replies to just 2-3 sentences and short.\n" +
                     "The following weather report uses FAHRENHEIT and MPH.\n" +
                     "You MUST interpret temperatures realistically.\n" +
                     "Below 32°F is freezing. 20s are bitter cold.\n" +
