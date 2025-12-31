@@ -7,6 +7,7 @@ services:
     ports:
       - "5060:5060/udp"
       - "5060:5060/tcp"
+      - "10000-10050:10000-10050/udp"  # RTP range
     volumes:
       - ./asterisk-config:/etc/asterisk
       - ./asterisk-sounds:/var/lib/asterisk/sounds
