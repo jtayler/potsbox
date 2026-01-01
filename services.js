@@ -4,6 +4,7 @@
 
 const VOICES = {
   operator:   "ash",
+  directory:   "cedar",
   weather:   "marin",
   time:      "verse",
   horoscope: "nova",
@@ -17,24 +18,18 @@ const VOICES = {
 module.exports = {
 SCIENCE: {
   type: "loop",
-  voice: "ash",
+  voice: VOICES.science,
   opener: "science",
   onTurn: "science"
 },
 
 COMPLAINTS: {
   type: "loop",
-  voice: "ballad",
+  voice: VOICES.complaints,
   opener: "Complaints department. What seems to be the problem?",
   onTurn: "complaints"
 },
 
-DIRECTORY: {
-  type: "loop",
-  voice: "operator",
-  opener: "Directory assistance. Whom would you like to reach?",
-  onTurn: "directory"
-},
   TIME: {
     type: "oneshot",
     voice: VOICES.time,
@@ -73,25 +68,14 @@ STORY: {
 
   OPERATOR: {
     type: "loop",
-    voice: "echo",
+    voice: VOICES.operator,
     opener: "Operator. How may I help you?"
   },
 
-  SCIENCE: {
-    type: "loop",
-    voice: VOICES.science,
-    opener: "science" // symbolic — opener is dynamic
-  },
-
-  COMPLAINTS: {
-    type: "loop",
-    voice: VOICES.complaints,
-    opener: "Complaints department. What seems to be the problem?"
-  },
 
   DIRECTORY: {
     type: "loop",
-    voice: "onyx",
+    voice: VOICES.directory,
     opener: "Directory assistance. Whom would you like to reach?"
   }
 };

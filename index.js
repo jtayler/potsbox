@@ -113,6 +113,9 @@ function randomOperatorVoice() {
 
 handlers.handleLoopTurn = async (service, heardRaw) => {
     const svc = SERVICES[service];
+    currentVoice = svc.voice;
+console.log("currentVoice!", currentVoice);
+
     if (!svc || svc.type !== "loop") return false;
 
     // Robust: prefer explicit config, but fall back to service name.
@@ -167,8 +170,6 @@ const CALLER_TZ = process.env.CALLER_TZ || "America/New_York";
 
 let activeService = null; // null | "SCIENCE"
 let currentVoice = null;
-let operatorVoice = randomOperatorVoice();
-currentVoice = operatorVoice;
 
 const DEFAULT_WEATHER_CITY = "New York City";
 let awaitingWeatherLocation = false;
@@ -306,6 +307,8 @@ if (req.method === "POST" && req.url.startsWith("/call/reply")) {
       // ONLY greet / opener — no transcription here
       await startCall({ exten });
     const svc = SERVICES[activeService];  // Ensure svc is correctly defined
+    currentVoice = svc.voice;
+console.log("currentVoice!", currentVoice);
 
     if (svc.type === "loop") {
       res.end("loop");
@@ -348,6 +351,8 @@ async function startCall({ exten }) {
 
     // Dynamically get the service object for activeService
     const svc = SERVICES[activeService];  // Ensure svc is correctly defined
+    currentVoice = svc.voice;
+console.log("currentVoice!", currentVoice);
 
     // ONE-SHOT SERVICES
     if (svc.type === "oneshot") {
@@ -454,6 +459,9 @@ async function speak(text) {
 
     try {
         // TTS → WAV chunk
+
+console.log("speak in voice", currentVoice);
+
         const speech = await openai.audio.speech.create({
             model: "gpt-4o-mini-tts",
             voice: currentVoice,
@@ -989,7 +997,8 @@ async function runCall(heardRaw) {
             if (!svc) return;
 
             // Ensure the correct voice is set based on the active service
-            currentVoice = svc.voice === "operator" ? operatorVoice : svc.voice;
+            currentVoice = svc.voice;
+console.log("currentVoice!", currentVoice);
 
             if (svc.type === "oneshot") {
 console.log("oneshot!");
@@ -1024,10 +1033,15 @@ console.log("oneshot!");
         if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
             const nextService = intent.action.replace("SERVICE_", "");
             const svc = SERVICES[nextService];
+    currentVoice = svc.voice;
+console.log("currentVoice!", currentVoice);
+
             if (svc) {
                 if (nextService !== activeService || svc.type !== "loop") {
                     activeService = nextService;  // Switch active service
-                    currentVoice = svc.voice === "operator" ? operatorVoice : svc.voice;
+                    currentVoice = svc.voice;
+console.log("currentVoice!", currentVoice);
+
                     await handlers.handleLoopTurn(nextService);
                     return;
                 }
