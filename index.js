@@ -114,6 +114,12 @@ handlers.handleLoopTurn = async (service, heardRaw) => {
 
     let reply = "";
 
+    const wavPath  = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.out.wav`);
+    if (fs.existsSync(wavPath)) {
+        fs.unlinkSync(wavPath);  // Clean up the old .wav file
+        console.log("Old wav file removed:", wavPath);
+    }
+
     if (mode.includes("science")) {
         reply = await answerScience(openai, heardRaw, buildContext());
     } else if (mode.includes("complaints")) {
