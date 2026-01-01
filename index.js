@@ -80,6 +80,12 @@ const handlers = {
             return;
         }
 
+        if (service === "DIRECTORY") {
+            const opener = await directoryResponse(openai, "", "No prior conversation.");
+    await speak(opener);
+            return;
+        }
+
         if (service === "STORY") {
             const opener = await answerStory(openai, "", "No prior conversation.");
     await speak(opener);

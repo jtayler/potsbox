@@ -3,12 +3,13 @@
 
 
 const VOICES = {
+  operator:   "ash",
   weather:   "marin",
   time:      "verse",
   horoscope: "nova",
-  science:   "ash",
+  science:   "sage",
   story:     "fable",
-  joke:      "ballad",
+  joke:      "coral",
   complaints:"ballad",
   prayer:    "shimmer"
 };
@@ -72,7 +73,7 @@ STORY: {
 
   OPERATOR: {
     type: "loop",
-    voice: "operator",
+    voice: "echo",
     opener: "Operator. How may I help you?"
   },
 
@@ -90,7 +91,7 @@ STORY: {
 
   DIRECTORY: {
     type: "loop",
-    voice: "operator",
+    voice: "onyx",
     opener: "Directory assistance. Whom would you like to reach?"
   }
 };
