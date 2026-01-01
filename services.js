@@ -2,82 +2,87 @@
 // No logic. No side effects.
 
 
-const VOICE_NAMES = ["verse", "nova", "ash", "shimmer", "marin", "ballad", "echo", "coral", "onyx", "sage", "cedar", "fable"];
+const VOICE_NAMES = [
+  "alloy",    // Neutral, clear, modern
+  "ash",      // Warm and friendly
+  "ballad",   // Deep and expressive
+  "coral",    // Light and whimsical
+  "echo",     // Crisp and clean
+  "fable",    // Storyteller, soft and inviting
+  "nova",     // Bold and clear
+  "onyx",     // Strong and steady
+  "sage",     // Calm and wise
+  "shimmer",  // Soft and delicate
+  "verse",    // Poetic, rhythmic
+  "marin",    // Bright and fresh
+  "cedar"     // Deep and earthy
+];
 
 const VOICES = {
-  operator:   "ash",
-  directory:   "cedar",
-  weather:   "marin",
-  time:      "verse",
-  horoscope: "nova",
-  science:   "sage",
-  story:     "fable",
-  joke:      "coral",
-  complaints:"ballad",
-  prayer:    "shimmer"
+  operator:   { voice: "ash",        description: "Warm and friendly" },
+  directory:  { voice: "cedar",      description: "Deep and earthy" },
+  weather:    { voice: "marin",      description: "Bright and fresh" },
+  time:       { voice: "verse",      description: "Poetic, rhythmic" },
+  horoscope:  { voice: "nova",       description: "Bold and clear" },
+  science:    { voice: "sage",       description: "Calm and wise" },
+  story:      { voice: "fable",      description: "Storyteller, soft and inviting" },
+  joke:       { voice: "coral",      description: "Light and whimsical" },
+  complaints: { voice: "ballad",     description: "Deep and expressive" },
+  prayer:     { voice: "shimmer",    description: "Soft and delicate" }
 };
 
 module.exports = {
-SCIENCE: {
-  type: "loop",
-  voice: VOICES.science,
-  opener: "science",
-  onTurn: "science"
-},
+  SCIENCE: {
+    voice: VOICES.science.voice, // Using the voice name
+    onTurn: "answerScience" // Function to handle continued turns (loop service)
+  },
 
-COMPLAINTS: {
-  type: "loop",
-  voice: VOICES.complaints,
-  opener: "Complaints department. What seems to be the problem?",
-  onTurn: "complaints"
-},
+  COMPLAINTS: {
+    voice: VOICES.complaints.voice, // Using the voice name
+    handler: "handleComplaintDepartment", // Function to handle initial service
+    onTurn: "complaints" // Function to handle continued turns
+  },
 
   TIME: {
-    type: "oneshot",
-    voice: VOICES.time,
-    handler: "handleTime"
+    voice: VOICES.time.voice, // Using the voice name
+    handler: "handleTime" // Function to handle service
   },
 
   WEATHER: {
-    type: "oneshot",
-    voice: VOICES.weather,
-    handler: "handleWeather"
+    voice: VOICES.weather.voice, // Using the voice name
+    handler: "handleWeather" // Function to handle service
   },
 
   JOKE: {
-    type: "oneshot",
-    voice: VOICES.joke,
-    handler: "handleJoke"
+    voice: VOICES.joke.voice, // Using the voice name
+    handler: "handleJoke" // Function to handle service
   },
 
   PRAYER: {
-    type: "oneshot",
-    voice: VOICES.prayer,
-    handler: "handlePrayer"
+    voice: VOICES.prayer.voice, // Using the voice name
+    handler: "handlePrayer" // Function to handle service
   },
 
   HOROSCOPE: {
-    type: "oneshot",
-    voice: VOICES.horoscope,
-    handler: "handleHoroscope"
+    voice: VOICES.horoscope.voice, // Using the voice name
+    handler: "handleHoroscope" // Function to handle service
   },
 
-STORY: {
-  type: "loop",
-  voice: VOICES.story,
-  onTurn: "story"
-},
+  STORY: {
+    voice: VOICES.story.voice, // Using the voice name
+    handler: "handleStory", // Function to handle initial service
+    onTurn: "story" // Function to handle continued turns (loop service)
+  },
 
   OPERATOR: {
-    type: "loop",
-    voice: VOICES.operator,
-    opener: "Operator. How may I help you?"
+    voice: VOICES.operator.voice, // Using the voice name
+    onTurn: "handleOperator", // Function to handle initial service
+    opener: "Operator. How may I help you?" // Initial greeting
   },
 
-
   DIRECTORY: {
-    type: "loop",
-    voice: VOICES.directory,
-    opener: "Directory assistance. Whom would you like to reach?"
+    voice: VOICES.directory.voice, // Using the voice name
+    onTurn: "directoryResponse", // Function to handle initial service
+    opener: "Directory assistance. Whom would you like to reach?" // Initial greeting
   }
 };

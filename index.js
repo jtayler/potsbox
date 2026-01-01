@@ -109,7 +109,7 @@ handlers.handleLoopTurn = async (service, heardRaw) => {
     currentVoice = svc.voice;
 console.log("currentVoice!", currentVoice);
 
-    if (!svc || svc.type !== "loop") return false;
+    if (!svc || !svc.onTurn) return false;
 
     // Robust: prefer explicit config, but fall back to service name.
     const mode = (svc.onTurn || service || "").toString().toLowerCase();
@@ -303,7 +303,7 @@ if (req.method === "POST" && req.url.startsWith("/call/reply")) {
     currentVoice = svc.voice;
 console.log("currentVoice!", currentVoice);
 
-    if (svc.type === "loop") {
+    if (svc.onTurn) {
       res.end("loop");
       return;
 }
@@ -348,7 +348,7 @@ async function startCall({ exten }) {
 console.log("currentVoice!", currentVoice);
 
     // ONE-SHOT SERVICES
-    if (svc.type === "oneshot") {
+    if (!svc.onTurn) {
         // Directly call the handler for the one-shot service
         const handler = handlers[svc.handler];
         if (handler) {
@@ -361,7 +361,7 @@ console.log("currentVoice!", currentVoice);
     }
 
     // LOOP SERVICES
-    if (svc.type === "loop") {
+    if (svc.onTurn) {
         console.log(`Running opener for loop service: ${activeService}`);
         await handlers.handleOpener(activeService);  // Run the opener for loop services
     }
@@ -998,19 +998,19 @@ async function runCall(heardRaw) {
             currentVoice = svc.voice;
 console.log("currentVoice!", currentVoice);
 
-            if (svc.type === "oneshot") {
-console.log("oneshot!");
-                await handlers[svc.handler]();  // Handle oneshot services
-                return;
-            }
+if (svc.handler) {  // If a handler exists, it's a one-shot service
+    console.log("oneshot!");
+    await handlers[svc.handler]();  // Handle oneshot services
+    return;
+}
 
-            if (svc.type === "loop") {
-                const opener = await handlers.handleOpener(activeService);
-                if (opener) {
-                    await speak(opener);  // Only speak the opener once
-                    addTurn("[opener]", opener);
-                }
-            }
+if (svc.onTurn) {  // If onTurn exists, it's a loop service
+    const opener = await handlers.handleOpener(activeService);
+    if (opener) {
+        await speak(opener);  // Only speak the opener once
+        addTurn("[opener]", opener);
+    }
+}
         }
 
         if (!heardRaw) {
@@ -1035,7 +1035,7 @@ console.log("oneshot!");
 console.log("currentVoice!", currentVoice);
 
             if (svc) {
-                if (nextService !== activeService || svc.type !== "loop") {
+                if (nextService !== activeService || !svc.onTurn) {
                     activeService = nextService;  // Switch active service
                     currentVoice = svc.voice;
 console.log("currentVoice!", currentVoice);
