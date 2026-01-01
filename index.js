@@ -76,21 +76,24 @@ const handlers = {
     handleOpener: async (service) => {
         if (service === "SCIENCE") {
             const opener = await answerScience(openai, "", "No prior conversation.");
+    await speak(opener);
             return;
         }
 
         if (service === "STORY") {
             const opener = await answerStory(openai, "", "No prior conversation.");
+    await speak(opener);
             return;
         }
 
         if (service === "COMPLAINTS") {
-            const opener = await directoryResponse(openai, "", "No prior conversation.");
+            const opener = await answerComplaintDepartment(openai, "", "No prior conversation.");
+    await speak(opener);
+
             return;
         }
 
-        const svc = SERVICES[service];
-        return svc?.opener || null; // Return the opener text directly
+        return 
     }
 };
 
@@ -325,8 +328,29 @@ async function startCall({ exten }) {
     call.greeted = false;  // Mark that we haven't processed any replies yet
     call.id = exten;
 
-    await handlers.handleOpener(activeService);  // Handle opener for other services (like STORY, SCIENCE, etc.)
+    // Dynamically get the service object for activeService
+    const svc = SERVICES[activeService];  // Ensure svc is correctly defined
+
+    // ONE-SHOT SERVICES
+    if (svc.type === "oneshot") {
+        // Directly call the handler for the one-shot service
+        const handler = handlers[svc.handler];
+        if (handler) {
+            console.log(`Running handler for oneshot service: ${activeService}`);
+            await handler();  // Call the one-shot handler (like handleWeather, handleTime, etc.)
+        } else {
+            console.error(`No handler found for oneshot service: ${activeService}`);
+        }
+        return;
+    }
+
+    // LOOP SERVICES
+    if (svc.type === "loop") {
+        console.log(`Running opener for loop service: ${activeService}`);
+        await handlers.handleOpener(activeService);  // Run the opener for loop services
+    }
 }
+
 
 // =====================================================
 // FILES: CLEANUP AT STARTUP
@@ -442,7 +466,7 @@ async function speak(text) {
             );
         });
 
-        fs.unlinkSync(wavPath);
+        //fs.unlinkSync(wavPath);
 
     } catch (err) {
         console.error("Error in speak:", err);
@@ -950,6 +974,7 @@ async function runCall(heardRaw) {
             currentVoice = svc.voice === "operator" ? operatorVoice : svc.voice;
 
             if (svc.type === "oneshot") {
+console.log("oneshot!");
                 await handlers[svc.handler]();  // Handle oneshot services
                 return;
             }
@@ -969,7 +994,7 @@ async function runCall(heardRaw) {
         }
         if (HANGUP_RE.test(heardRaw)) {
             await speak("Alright. Goodbye.");
-            await hangupExtension(`${call.id}`); 
+            //await hangupExtension(${exten}); 
             return;
         }
 
