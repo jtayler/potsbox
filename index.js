@@ -140,7 +140,7 @@ http.createServer(async (req, res) => {
 
             // 2) Transcribe caller audio after the greeting is completed
             const heardRaw = await transcribeFromFile(wavPath);
-            console.log("HUMAN TEXT:", heardRaw); // Log the transcribed input
+            console.log("RECORDED TEXT:", heardRaw); // Log the transcribed input
 
             // Append text
             fs.appendFileSync(ctxPath, heardRaw + "\n");
@@ -248,7 +248,7 @@ function cleanForSpeech(text) {
 }
 
 async function speak(text) {
-    console.log("CYBORG TEXT:", text); // Add a log to check what text we're trying to speak
+    console.log("SPOKEN TEXT:", text); // Add a log to check what text we're trying to speak
     const s = cleanForSpeech(text);
 
     if (!s) {
