@@ -1,5 +1,3 @@
-// potsbox index.js — Operator + Intent Routing (Conservative, Stable)
-// CommonJS — paste and run
 
 const SERVICES = require("./services");
 
@@ -14,54 +12,45 @@ const { exec } = require("child_process");
 const crypto = require("crypto");
 const HANGUP_RE = /\b(bye|goodbye|hang up|get off|gotta go|have to go|see you)\b/i;
 
-const serviceByExten = Object.fromEntries(
-    Object.entries(SERVICES)
-        .filter(([, svc]) => svc.ext)
-        .map(([name, svc]) => [svc.ext, name])
-);
-
 const handlers = {
-    handleTime: async () => {
+    handleTime: async ({ svc }) => {
         const { time, seconds } = getTimeParts();
         await speak(`At the tone, the time will be ${time} and ${secondsToWords(seconds)}.`);
         await speak("BEEEP!");
         await speak("Goodbye.");
     },
 
-    handleWeather: async () => {
+    handleWeather: async ({ svc }) => {
         const report = await getWeatherReport(DEFAULT_WEATHER_CITY);
         if (!report) return speak("Weather service is temporarily unavailable.");
         await speak(await narrateWeather(openai, report));
         await speak("Remember folks, if you don't like the weather, wait five minutes. Good-bye.");
     },
 
-    handleOpener: async (service) => {
-        const svc = SERVICES[service];
-        if (!svc?.onTurn) return;
+    handleOpener: async (svc) => {
+        if (!svc.onTurn) return;
 
         const fn = handlers[svc.onTurn];
         if (!fn) throw new Error(`Missing handler: ${svc.onTurn}`);
 
-        const reply = await fn({
-            svc,
-            user: "",
-            context: "No prior conversation.",
-        });
-
+        const reply = await fn({ svc, user: "", context: buildContext() });
         if (reply) await speak(reply);
     },
 };
 
 handlers.runService = runService; // ← RIGHT HERE
 
-handlers.handleLoopTurn = async (service, heardRaw) => {
-    const svc = SERVICES[service];
-    if (!svc?.onTurn) return false;
+handlers.runServiceOneShot = async ({ svc, user, context }) => {
+  const reply = await runService({ svc, user, context });
+  if (reply) await speak(reply);
+};
 
-    currentVoice = svc.voice;
+handlers.operatorChat = async ({ user }) => {
+  await operatorChat(user);
+};
 
-    const wavPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.out.wav`);
-    if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
+handlers.handleLoopTurn = async (svc, heardRaw) => {
+    if (!svc.onTurn) return false;
 
     const reply = await runService({
         svc,
@@ -70,7 +59,6 @@ handlers.handleLoopTurn = async (service, heardRaw) => {
     });
 
     if (!reply) return false;
-
     await speak(reply.trim());
     return true;
 };
@@ -87,13 +75,11 @@ const openai = new OpenAI({
 });
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
-// =====================================================
-// CONFIG
-// =====================================================
-const CALLER_TZ = process.env.CALLER_TZ || "America/New_York";
+function serviceForExten(exten) {
+    return Object.values(SERVICES).find((svc) => svc.ext === exten) || SERVICES.OPERATOR;
+}
 
-let activeService = null; // null | "SCIENCE"
-let currentVoice = null;
+const CALLER_TZ = process.env.CALLER_TZ || "America/New_York";
 
 const DEFAULT_WEATHER_CITY = "New York City";
 async function getWeatherReport(city) {
@@ -120,12 +106,10 @@ async function getWeatherReport(city) {
     return `Weather for ${place}: ${Math.round(cur.temperature_2m)} degrees, wind ${Math.round(cur.wind_speed_10m)} miles an hour, precipitation ${cur.precipitation} inches right now.`;
 }
 
-// =====================================================
-// CALL SESSION
-// =====================================================
 const call = {
     id: crypto.randomUUID(),
-    greeted: false
+    greeted: false,
+    service: null,
 };
 
 function buildContext() {
@@ -137,10 +121,6 @@ function buildContext() {
     return text || "No prior conversation.";
 }
 
-// =====================================================
-// SPARK IT UP
-// =====================================================
-
 http.createServer(async (req, res) => {
     // =========================
     // REPLY — caller spoke
@@ -151,7 +131,6 @@ http.createServer(async (req, res) => {
             const exten = (query.exten || "").trim();
 
             call.id = exten;
-            activeService = serviceByExten[exten] || "OPERATOR"; // Ensure activeService is set here
 
             const baseDir = path.join(__dirname, "asterisk-sounds", "en");
             const ulawPath = path.join(baseDir, `${exten}_in.ulaw`);
@@ -186,9 +165,6 @@ http.createServer(async (req, res) => {
         }
     }
 
-    // =========================
-    // START — incoming call
-    // =========================
     if (req.method === "POST" && req.url.startsWith("/call/start")) {
         try {
             const { query } = url.parse(req.url, true);
@@ -201,11 +177,7 @@ http.createServer(async (req, res) => {
 
             // ONLY greet / opener — no transcription here
             await startCall({ exten });
-            const svc = SERVICES[activeService]; // Ensure svc is correctly defined
-            currentVoice = svc.voice;
-            console.log("currentVoice!", currentVoice);
-
-            if (isLoopService(svc)) {
+            if (isLoopService(call.service)) {
                 res.end("loop");
                 return;
             }
@@ -234,39 +206,21 @@ function resetCallFiles(callId) {
 }
 
 async function startCall({ exten }) {
-    activeService = serviceByExten[exten] || "OPERATOR";
-    console.log("Start Call Active Service:", activeService);
-
-    call.greeted = false;
     call.id = exten;
+    call.greeted = false;
 
-    const svc = SERVICES[activeService];
-    currentVoice = svc.voice;
-    console.log("currentVoice!", currentVoice);
+    call.service = serviceForExten(exten);
+    const svc = call.service;
 
     if (!isLoopService(svc)) {
         const fn = handlers[svc.handler];
-        if (!fn) return;
-
-        const reply = await fn({
-            svc,
-            user: "",
-            context: buildContext(),
-        });
-
-        if (reply) await speak(reply);
+        if (fn) await fn({ svc, user: "", context: buildContext() });
         if (svc.goodbye) await speak(svc.goodbye);
-
         return;
     }
 
-    console.log(`Running opener for loop service: ${activeService}`);
-    await handlers.handleOpener(activeService);
+    await handlers.handleOpener(svc);
 }
-
-// =====================================================
-// FILES: CLEANUP AT STARTUP
-// =====================================================
 
 const TTS_DIR = "asterisk-sounds/en";
 const MAX_AGE_MS = 60 * 1000; // 60 seconds
@@ -288,10 +242,6 @@ function cleanupTTS() {
 }
 
 cleanupTTS();
-
-// =====================================================
-// AUDIO: TTS (WAV only)
-// =====================================================
 
 function cleanForSpeech(text) {
     return (text || "").replace(/^\s*operator:\s*/i, "").trim();
@@ -317,11 +267,16 @@ async function speak(text) {
     try {
         // TTS → WAV chunk
 
-        console.log("speak in voice", currentVoice);
+        const svc = call.service;
+        if (!svc?.voice) throw new Error("No voice for current service");
+
+        const voice = svc.voice;
+
+        console.log("speak in voice", voice);
 
         const speech = await openai.audio.speech.create({
             model: "gpt-4o-mini-tts",
-            voice: currentVoice,
+            voice: voice,
             input: s,
             format: "wav",
         });
@@ -353,10 +308,6 @@ async function speak(text) {
         console.error("Error in speak:", err);
     }
 }
-
-// =====================================================
-// INTENT ROUTER (masked)
-// =====================================================
 
 async function routeIntentMasked(heardRaw) {
     try {
@@ -401,9 +352,6 @@ async function routeIntentMasked(heardRaw) {
     }
 }
 
-// =====================================================
-// OPERATOR RESPONSE
-// =====================================================
 async function operatorChat(heardRaw) {
     console.log("Handling Operator Chat for:", heardRaw); // Log the input
 
@@ -425,17 +373,12 @@ async function operatorChat(heardRaw) {
         });
 
         const reply = (r.output_text || "").replace(/^operator:\s*/i, "").trim();
-        console.log("Operator Response:", reply); // Log operator response
 
         await speak(reply);
     } catch (err) {
         console.error("Error in operator chat:", err);
     }
 }
-
-// =====================================================
-// SERVICES
-// =====================================================
 
 function getTimeParts() {
     const now = new Date();
@@ -571,13 +514,6 @@ async function narrateWeather(openai, rawReport) {
     return (r.output_text || "").trim();
 }
 
-// =====================================================
-// MAIN CALL
-// =====================================================
-// =====================================================
-// CALL LOOP (DO NOT AUTO-START)
-// =====================================================
-
 async function hangupExtension(targetExtension) {
     const auth = "Basic " + Buffer.from("1001:1234").toString("base64");
     const baseUrl = "http://192.168.1.161:8088/ari/channels"; // ARI endpoint for channels
@@ -643,80 +579,28 @@ async function runService({ svc, user, context }) {
     return (r.output_text || "").trim();
 }
 
-async function handleOneShotLLM(svc) {
-    const reply = await runService({ svc });
-    await speak(reply);
-    await speak(svc.goodbye || "Good-bye.");
-}
-
 function isLoopService(svc) {
     return typeof svc.onTurn === "string";
 }
 
 async function runCall(heardRaw) {
-    try {
-        const svc = SERVICES[activeService];
-        if (!svc) return;
+    const svc = call.service;
+    if (!svc) return;
 
-        // =========================
-        // FIRST ENTRY (greeting / opener)
-        // =========================
-        if (!call.greeted) {
-            call.greeted = true;
+    if (!heardRaw) return;
+    if (HANGUP_RE.test(heardRaw)) return speak("Alright. Goodbye.");
 
-            currentVoice = svc.voice;
-            console.log("currentVoice!", currentVoice);
+    if (await handlers.handleLoopTurn(svc, heardRaw)) return;
 
-            // ONE-SHOT
-            if (!isLoopService(svc)) {
-                const fn = handlers[svc.handler];
-                if (fn)
-                    await fn({
-                        svc,
-                        user: "",
-                        context: buildContext(),
-                    });
-                return;
-            }
-
-            // OTHERWISE LOOP → opener
-            await handlers.handleOpener(activeService);
-            return; // stop here, wait for caller input
-        }
-
-        // =========================
-        // EMPTY INPUT (only after greeting)
-        // =========================
-        if (!heardRaw) return;
-
-        if (HANGUP_RE.test(heardRaw)) {
-            await speak("Alright. Goodbye.");
+    const intent = await routeIntentMasked(heardRaw);
+    if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
+        const next = SERVICES[intent.action.replace("SERVICE_", "")];
+        if (next && next !== svc) {
+            call.service = next;
+            await runCall("");
             return;
         }
-
-        // =========================
-        // LOOP TURN
-        // =========================
-        if (await handlers.handleLoopTurn(activeService, heardRaw)) return;
-
-        // =========================
-        // INTENT SWITCHING
-        // =========================
-        const intent = await routeIntentMasked(heardRaw);
-        if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
-            const nextService = intent.action.replace("SERVICE_", "");
-            if (nextService !== activeService && SERVICES[nextService]) {
-                activeService = nextService;
-                await runCall(""); // empty input = opener
-                return;
-            }
-        }
-
-        // =========================
-        // FALLBACK
-        // =========================
-        await operatorChat(heardRaw);
-    } catch (err) {
-        console.error("Error in runCall:", err);
     }
+
+    await operatorChat(heardRaw);
 }
