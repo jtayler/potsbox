@@ -16,59 +16,68 @@ const VOICES = {
   deepAndEarthy: "cedar"         // Corresponds to "Deep and earthy"
 };
 
-// Services structure linking the descriptions directly
+// Services structure (single source of truth)
 const SERVICES = {
   SCIENCE: {
-    voice: VOICES.calmandWise,   
-    onTurn: "answerScience"      
+    ext: "7243",
+    voice: VOICES.calmAndWise,
+    onTurn: "answerScience"
   },
 
   COMPLAINTS: {
-    voice: VOICES.deepAndExpressive,  
-    onTurn: "complaints"             
+    ext: "2333",
+    voice: VOICES.deepAndExpressive,
+    onTurn: "answerComplaintDepartment"
   },
 
   TIME: {
-    voice: VOICES.poeticAndRhythmic, 
-    handler: "handleTime"           
+    ext: "8463",
+    voice: VOICES.poeticAndRhythmic,
+    handler: "handleTime"
   },
 
   WEATHER: {
-    voice: VOICES.brightAndFresh,    
-    handler: "handleWeather"         
+    ext: "9328",
+    voice: VOICES.brightAndFresh,
+    handler: "handleWeather"
   },
 
   JOKE: {
-    voice: VOICES.lightAndWhimsical, 
-    handler: "handleJoke"            
+    ext: "9857",
+    voice: VOICES.lightAndWhimsical,
+    handler: "handleJoke"
   },
 
   PRAYER: {
-    voice: VOICES.softAndDelicate,   
-    handler: "handlePrayer"          
+    ext: "4637",
+    voice: VOICES.softAndDelicate,
+    handler: "handlePrayer"
   },
 
   HOROSCOPE: {
-    voice: VOICES.deepAndExpressive, 
-    handler: "handleHoroscope"       
+    ext: "4676",
+    voice: VOICES.deepAndExpressive,
+    handler: "handleHoroscope"
   },
 
   STORY: {
-    voice: VOICES.storyteller,       
-    handler: "handleStory",          
-    onTurn: "story"                  
+    ext: "7867",
+    voice: VOICES.storyteller,
+    onTurn: "answerStory"
   },
 
   OPERATOR: {
-    voice: VOICES.warmAndFriendly,   
-    handler: "handleOperator",       
+    ext: "0",
+    voice: VOICES.warmAndFriendly,
+    onTurn: "operatorChat",
     opener: "Operator. How may I help you?"
   },
 
   DIRECTORY: {
-    voice: VOICES.deepAndEarthy,     
-    onTurn: "directoryResponse", // Function to handle initial service
-    opener: "Directory assistance. Whom would you like to reach?" // Initial greeting
+    ext: "411",
+    voice: VOICES.deepAndEarthy,
+    onTurn: "directoryResponse",
+    opener: "Directory assistance. Whom would you like to reach?"
   }
 };
 

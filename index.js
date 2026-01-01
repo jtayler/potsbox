@@ -16,18 +16,11 @@ const {
 const crypto = require("crypto");
 const HANGUP_RE = /\b(bye|goodbye|hang up|get off|gotta go|have to go|see you)\b/i;
 
-    const serviceByExten = {
-        "0": "OPERATOR",
-        "411": "DIRECTORY",
-        "8463": "TIME",
-        "9328": "WEATHER",
-        "7243": "SCIENCE",
-        "4676": "HOROSCOPE",
-        "7867": "STORY",
-        "4637": "PRAYER",
-        "9857": "JOKE",
-        "2333": "COMPLAINTS"
-    };
+const serviceByExten = Object.fromEntries(
+  Object.entries(SERVICES)
+    .filter(([, svc]) => svc.ext)
+    .map(([name, svc]) => [svc.ext, name])
+);
 
 const handlers = {
     handleTime: async () => {
