@@ -103,13 +103,6 @@ const handlers = {
     }
 };
 
-const OPERATOR_VOICES = ["verse", "nova", "ash", "shimmer", "marin", "ballad", "echo", "coral", "onyx", "sage", "cedar", "fable"];
-
-function randomOperatorVoice() {
-    return OPERATOR_VOICES[
-        Math.floor(Math.random() * OPERATOR_VOICES.length)
-    ];
-}
 
 handlers.handleLoopTurn = async (service, heardRaw) => {
     const svc = SERVICES[service];
@@ -126,7 +119,7 @@ console.log("currentVoice!", currentVoice);
     const wavPath  = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.out.wav`);
     if (fs.existsSync(wavPath)) {
         fs.unlinkSync(wavPath);  // Clean up the old .wav file
-        console.log("Old wav file removed:", wavPath);
+        //console.log("Old wav file removed:", wavPath);
     }
 
     if (mode.includes("science")) {
@@ -259,7 +252,7 @@ if (req.method === "POST" && req.url.startsWith("/call/reply")) {
 
         // 2) Transcribe caller audio after the greeting is completed
         const heardRaw = await transcribeFromFile(wavPath);
-        console.log("REPLYING TEXT:", heardRaw);  // Log the transcribed input
+        console.log("CALLER TEXT:", heardRaw);  // Log the transcribed input
 
         // 3) Record the conversation turn
         addTurn("[heard]", heardRaw);
@@ -441,7 +434,7 @@ async function writeWavFile(pcmData, id) {
 }
 
 async function speak(text) {
-    console.log("SPEAKING TEXT:", text); // Add a log to check what text we're trying to speak
+    console.log("OPERATOR TEXT:", text); // Add a log to check what text we're trying to speak
     const s = cleanForSpeech(text);
 
     if (!s) {

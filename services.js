@@ -2,6 +2,8 @@
 // No logic. No side effects.
 
 
+const VOICE_NAMES = ["verse", "nova", "ash", "shimmer", "marin", "ballad", "echo", "coral", "onyx", "sage", "cedar", "fable"];
+
 const VOICES = {
   operator:   "ash",
   directory:   "cedar",
