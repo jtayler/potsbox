@@ -21,7 +21,7 @@ const SERVICES = {
     SCIENCE: {
         ext: "7243",
         voice: VOICES.calmAndWise,
-        onTurn: "runService",
+        onTurn: "runServiceLoop",
         content:
             "You are the Science Line on a public telephone exchange.\n" +
             "Ask about ONE idea involving electricity, rocks, the Earth, space, or the early universe.\n" +
@@ -40,7 +40,7 @@ const SERVICES = {
     COMPLAINTS: {
         ext: "4357",
         voice: VOICES.deepAndExpressive,
-        onTurn: "runService",
+        onTurn: "runServiceLoop",
         opener: "Help line how can I assist you today?",
         content:
             "You are the Help Line.\n" +
@@ -78,7 +78,7 @@ const SERVICES = {
     JOKE: {
         ext: "9857",
         voice: VOICES.lightAndWhimsical,
-        handler: "runServiceOneShot",
+        handler: "runService",
         content:
             "You are a Dial-a-Joke line. Tell ONE short animal joke. All jokes involve rodents, parrot droppings, geese, ungulates, goats, sheep barnyard animals and fun things kids things are fun and funny. Porcine, Skinks, Galliform, Lagomorph, Mustelid, Bovine ruminant,Proboscidean, Monkeys, Goose, Ursine etc. Chinchillas and worms and insects and dinosaurs. Lots of dinosaurs! Every Dino out there. Labubu or Picachu. Use funny science names like bovine instead of cow. Be creative and unique and different.",
     },
@@ -86,7 +86,7 @@ const SERVICES = {
 PRAYER: {
     ext: "4637",
     voice: VOICES.softAndDelicate,
-    handler: "runServiceOneShot",
+    handler: "runService",
     content:
         "You are Dial-a-Prayer. Offer ONE short, sharp and humorous atheist prayer. " +
         "It is part of the Flying Spaghetti Monster religion. Say 'Rah-Men' instead of Amen. " +
@@ -96,7 +96,7 @@ PRAYER: {
     HOROSCOPE: {
         ext: "4676",
         voice: VOICES.deepAndExpressive,
-        handler: "runService",
+        handler: "runServiceLoop",
         content:
             `You are Horoscopes-by-Phone, broadcasting live like a late-night AM radio show.\n` +
             `Today is {{weekday}}, {{month}} {{day}}. The stars are parked in {{sign}}.\n\n` +
@@ -114,7 +114,7 @@ PRAYER: {
             "For example, 'The Fearless Flying Taylers were flying over Central Park when suddenly, the wind started to change direction. 'Should they follow the wind to see where it leads or stop to look for clues on the ground?' What should they do next?' Make sure the question is something easy for kids to choose from, like, 'Should they go left or right?' or 'Should they take the magic key or the map?'.\n" +
             "After they make their choice, continue the story based on what they said, adding new details and keeping the adventure going. Make sure to stop saying they are a happy family and focus on their fun, magical adventure.\n" +
             "The stories should be magical, filled with excitement, and lead to fun and curious decisions! Keep the stories warm, and playfully tease them with choices they'll want to explore.",
-        onTurn: "runService",
+        onTurn: "runServiceLoop",
     },
 
     OPERATOR: {
@@ -127,7 +127,7 @@ PRAYER: {
     DIRECTORY: {
         ext: "411",
         voice: VOICES.deepAndEarthy,
-        onTurn: "runService",
+        onTurn: "runServiceLoop",
         opener: "Directory assistance. Whom would you like to reach?",
         content:
             "You are a 1970s telephone directory operator (411).\n\n" +

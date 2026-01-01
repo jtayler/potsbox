@@ -38,10 +38,10 @@ const handlers = {
     },
 };
 
-handlers.runService = runService; // ← RIGHT HERE
+handlers.runServiceLoop = runServiceLoop; // ← RIGHT HERE
 
-handlers.runServiceOneShot = async ({ svc, user, context }) => {
-  const reply = await runService({ svc, user, context });
+handlers.runService = async ({ svc, user, context }) => {
+  const reply = await runServiceLoop({ svc, user, context });
   if (reply) await speak(reply);
 };
 
@@ -52,7 +52,7 @@ handlers.operatorChat = async ({ user }) => {
 handlers.handleLoopTurn = async (svc, heardRaw) => {
     if (!svc.onTurn) return false;
 
-    const reply = await runService({
+    const reply = await runServiceLoop({
         svc,
         user: heardRaw,
         context: buildContext(),
@@ -122,9 +122,6 @@ function buildContext() {
 }
 
 http.createServer(async (req, res) => {
-    // =========================
-    // REPLY — caller spoke
-    // =========================
     if (req.method === "POST" && req.url.startsWith("/call/reply")) {
         try {
             const { query } = url.parse(req.url, true);
@@ -559,7 +556,7 @@ async function hangupExtension(targetExtension) {
     }
 }
 
-async function runService({ svc, user, context }) {
+async function runServiceLoop({ svc, user, context }) {
     const input = [{ role: "system", content: svc.content }];
 
     if (user !== undefined) {
