@@ -296,10 +296,16 @@ if (req.method === "POST" && req.url.startsWith("/call/reply")) {
       call.id = exten;
       resetCallFiles(call.id);
 
+
       // ONLY greet / opener — no transcription here
       await startCall({ exten });
+    const svc = SERVICES[activeService];  // Ensure svc is correctly defined
 
-      res.end("OK\n");
+    if (svc.type === "loop") {
+      res.end("loop");
+      return;
+}
+      res.end("once");
       return;
 
     } catch (err) {
