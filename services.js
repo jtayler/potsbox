@@ -1,88 +1,75 @@
 // services.js — declarative service model ONLY
 // No logic. No side effects.
 
-
-const VOICE_NAMES = [
-  "alloy",    // Neutral, clear, modern
-  "ash",      // Warm and friendly
-  "ballad",   // Deep and expressive
-  "coral",    // Light and whimsical
-  "echo",     // Crisp and clean
-  "fable",    // Storyteller, soft and inviting
-  "nova",     // Bold and clear
-  "onyx",     // Strong and steady
-  "sage",     // Calm and wise
-  "shimmer",  // Soft and delicate
-  "verse",    // Poetic, rhythmic
-  "marin",    // Bright and fresh
-  "cedar"     // Deep and earthy
-];
-
 const VOICES = {
-  operator:   { voice: "ash",        description: "Warm and friendly" },
-  directory:  { voice: "cedar",      description: "Deep and earthy" },
-  weather:    { voice: "marin",      description: "Bright and fresh" },
-  time:       { voice: "verse",      description: "Poetic, rhythmic" },
-  horoscope:  { voice: "nova",       description: "Bold and clear" },
-  science:    { voice: "sage",       description: "Calm and wise" },
-  story:      { voice: "fable",      description: "Storyteller, soft and inviting" },
-  joke:       { voice: "coral",      description: "Light and whimsical" },
-  complaints: { voice: "ballad",     description: "Deep and expressive" },
-  prayer:     { voice: "shimmer",    description: "Soft and delicate" }
+  deepAndExpressive: "ballad",   // Corresponds to "Deep and expressive"
+  warmAndFriendly: "ash",        // Corresponds to "Warm and friendly"
+  lightAndWhimsical: "coral",    // Corresponds to "Light and whimsical"
+  crispAndClean: "echo",         // Corresponds to "Crisp and clean"
+  storyteller: "fable",          // Corresponds to "Storyteller, soft and inviting"
+  boldAndClear: "nova",          // Corresponds to "Bold and clear"
+  strongAndSteady: "onyx",       // Corresponds to "Strong and steady"
+  calmAndWise: "sage",           // Corresponds to "Calm and wise"
+  softAndDelicate: "shimmer",    // Corresponds to "Soft and delicate"
+  poeticAndRhythmic: "verse",    // Corresponds to "Poetic, rhythmic"
+  brightAndFresh: "marin",       // Corresponds to "Bright and fresh"
+  deepAndEarthy: "cedar"         // Corresponds to "Deep and earthy"
 };
 
-module.exports = {
+// Services structure linking the descriptions directly
+const SERVICES = {
   SCIENCE: {
-    voice: VOICES.science.voice, // Using the voice name
-    onTurn: "answerScience" // Function to handle continued turns (loop service)
+    voice: VOICES.calmandWise,   
+    onTurn: "answerScience"      
   },
 
   COMPLAINTS: {
-    voice: VOICES.complaints.voice, // Using the voice name
-    handler: "handleComplaintDepartment", // Function to handle initial service
-    onTurn: "complaints" // Function to handle continued turns
+    voice: VOICES.deepAndExpressive,  
+    onTurn: "complaints"             
   },
 
   TIME: {
-    voice: VOICES.time.voice, // Using the voice name
-    handler: "handleTime" // Function to handle service
+    voice: VOICES.poeticAndRhythmic, 
+    handler: "handleTime"           
   },
 
   WEATHER: {
-    voice: VOICES.weather.voice, // Using the voice name
-    handler: "handleWeather" // Function to handle service
+    voice: VOICES.brightAndFresh,    
+    handler: "handleWeather"         
   },
 
   JOKE: {
-    voice: VOICES.joke.voice, // Using the voice name
-    handler: "handleJoke" // Function to handle service
+    voice: VOICES.lightAndWhimsical, 
+    handler: "handleJoke"            
   },
 
   PRAYER: {
-    voice: VOICES.prayer.voice, // Using the voice name
-    handler: "handlePrayer" // Function to handle service
+    voice: VOICES.softAndDelicate,   
+    handler: "handlePrayer"          
   },
 
   HOROSCOPE: {
-    voice: VOICES.horoscope.voice, // Using the voice name
-    handler: "handleHoroscope" // Function to handle service
+    voice: VOICES.deepAndExpressive, 
+    handler: "handleHoroscope"       
   },
 
   STORY: {
-    voice: VOICES.story.voice, // Using the voice name
-    handler: "handleStory", // Function to handle initial service
-    onTurn: "story" // Function to handle continued turns (loop service)
+    voice: VOICES.storyteller,       
+    handler: "handleStory",          
+    onTurn: "story"                  
   },
 
   OPERATOR: {
-    voice: VOICES.operator.voice, // Using the voice name
-    onTurn: "handleOperator", // Function to handle initial service
-    opener: "Operator. How may I help you?" // Initial greeting
+    voice: VOICES.warmAndFriendly,   
+    handler: "handleOperator",       
+    opener: "Operator. How may I help you?"
   },
 
   DIRECTORY: {
-    voice: VOICES.directory.voice, // Using the voice name
+    voice: VOICES.deepAndEarthy,     
     onTurn: "directoryResponse", // Function to handle initial service
     opener: "Directory assistance. Whom would you like to reach?" // Initial greeting
   }
 };
+
+module.exports = SERVICES;
