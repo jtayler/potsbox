@@ -843,7 +843,7 @@ async function transcribeFromFile(path) {
         file,
         model: "gpt-4o-mini-transcribe"
     });
-    return (stt.text || "").trim();
+    return (stt.text || "").replace(/[^\w\s,.!?-]/g, '').trim();  // Remove anything not a standard character
 }
 
 async function streamTranscribe() {
