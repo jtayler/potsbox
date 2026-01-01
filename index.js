@@ -5,7 +5,6 @@ const SERVICES = require("./services");
 
 const WebSocket = require("ws");
 const http = require("http");
-const wantsAstrisk = true;
 const path = require("path");
 
 const fs = require("fs");
@@ -16,6 +15,19 @@ const {
 } = require("child_process");
 const crypto = require("crypto");
 const HANGUP_RE = /\b(bye|goodbye|hang up|get off|gotta go|have to go|see you)\b/i;
+
+    const serviceByExten = {
+        "0": "OPERATOR",
+        "411": "DIRECTORY",
+        "8463": "TIME",
+        "9328": "WEATHER",
+        "7243": "SCIENCE",
+        "4676": "HOROSCOPE",
+        "7867": "STORY",
+        "9857": "JOKE",
+        "4637": "PRAYER",
+        "2333": "COMPLAINTS"
+    };
 
 const handlers = {
     handleTime: async () => {
@@ -64,23 +76,21 @@ const handlers = {
     handleOpener: async (service) => {
         if (service === "SCIENCE") {
             const opener = await answerScience(openai, "", "No prior conversation.");
-            await speak(opener);
-            addTurn("[science opener]", opener);
             return;
         }
 
         if (service === "STORY") {
             const opener = await answerStory(openai, "", "No prior conversation.");
-            await speak(opener);
-            addTurn("[story opener]", opener);
+            return;
+        }
+
+        if (service === "COMPLAINTS") {
+            const opener = await directoryResponse(openai, "", "No prior conversation.");
             return;
         }
 
         const svc = SERVICES[service];
-        if (svc?.opener) {
-            await speak(svc.opener);
-            addTurn(`[${service.toLowerCase()} opener]`, svc.opener);
-        }
+        return svc?.opener || null; // Return the opener text directly
     }
 };
 
@@ -115,16 +125,11 @@ handlers.handleLoopTurn = async (service, heardRaw) => {
     }
 
     reply = (reply || "").trim();
-    if (!reply) {
-        // Fail safe: avoid “silent loop”
-        await speak("Sorry—say that again?");
-        return true;
-    }
-
     await speak(reply);
-    addTurn(heardRaw, reply);
+    addTurn("[reply]", reply);
     return true;
 };
+
 
 
 const url = require("url");
@@ -217,49 +222,110 @@ async function waitForAudio() {
 }
 
 http.createServer(async (req, res) => {
-    if (req.method === "POST" && req.url.startsWith("/call/start")) {
-        const {
-            query
-        } = url.parse(req.url, true);
-        const exten = (query.exten || "0").trim();
 
-        log("INCOMING CALL:", exten);
+  // =========================
+  // REPLY — caller spoke
+  // =========================
+if (req.method === "POST" && req.url.startsWith("/call/reply")) {
+    try {
+        const { query } = url.parse(req.url, true);
+        const exten = (query.exten || "").trim();
+ 
+        call.id = exten;
+        activeService = serviceByExten[exten] || "OPERATOR";  // Ensure activeService is set here
 
-await startCall({ exten });
+        const baseDir = path.join(__dirname, "asterisk-sounds", "en");
+        const ulawPath = path.join(baseDir, `${exten}_in.ulaw`);
+        const wavPath  = path.join(baseDir, `${exten}_in.wav`);
+        const oldWav  = path.join(baseDir, `${exten}.out.wav`);
+
+    const ctxPath  = path.join(baseDir, `${call.id}.ctx.txt`);
+
+        // 2) Transcribe caller audio after the greeting is completed
+        const heardRaw = await transcribeFromFile(wavPath);
+        console.log("REPLYING TEXT:", heardRaw);  // Log the transcribed input
+
+        // 3) Record the conversation turn
+        addTurn("[heard]", heardRaw);
+
+
+    // Append text
+    fs.appendFileSync(ctxPath, heardRaw + "\n");
+
+        // 4) Generate a response + speak
+        await runCall(heardRaw);  // Process the transcribed text and generate a response
+
+        // 5) After generating the response, convert the response audio
+        await new Promise((resolve, reject) => {
+            exec(
+                `ffmpeg -y -i "${wavPath}" -ar 8000 -ac 1 -f mulaw "${ulawPath}"`,
+                err => (err ? reject(err) : resolve())
+            );
+        });
 
         res.end("OK\n");
         return;
-    }
 
-    res.statusCode = 404;
-    res.end();
+    } catch (err) {
+        console.error(err);
+        res.statusCode = 500;
+        res.end("ERROR\n");
+        return;
+    }
+}
+
+  // =========================
+  // START — incoming call
+  // =========================
+  if (req.method === "POST" && req.url.startsWith("/call/start")) {
+    try {
+      const { query } = url.parse(req.url, true);
+      const exten = (query.exten || "0").trim();
+
+      log("INCOMING CALL:", exten);
+
+      call.id = exten;
+      resetCallFiles(call.id);
+
+      // ONLY greet / opener — no transcription here
+      await startCall({ exten });
+
+      res.end("OK\n");
+      return;
+
+    } catch (err) {
+      console.error(err);
+      res.statusCode = 500;
+      res.end("ERROR\n");
+      return;
+    }
+  }
+
+  res.statusCode = 404;
+  res.end();
+
 }).listen(3000, () => {
-    console.log("Listening on :3000");
+  console.log("Listening on :3000");
 });
 
-async function startCall({
-    exten
-}) {
-    const serviceByExten = {
-        "0": "OPERATOR",
-        "411": "DIRECTORY",
-        "8463": "TIME",
-        "9328": "WEATHER",
-        "7243": "SCIENCE",
-        "4676": "HOROSCOPE",
-        "7867": "STORY",
-        "9857": "JOKE",
-        "4637": "PRAYER",
-        "2333": "COMPLAINTS"
-    };
+function resetCallFiles(callId) {
+  const base = path.join(__dirname, "asterisk-sounds", "en");
+  for (const ext of ["ctx.txt", "out.wav", "out.ulaw"]) {
+    const p = path.join(base, `${callId}.${ext}`);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  }
+}
 
+
+async function startCall({ exten }) {
     activeService = serviceByExten[exten] || "OPERATOR";
-    console.log("Active Service:", activeService);
+    console.log("Start Call Active Service:", activeService);  // Log for debugging
 
     call.history = [];
-    call.greeted = false;
-await runCall();
-await waitForAudio();
+    call.greeted = false;  // Mark that we haven't processed any replies yet
+    call.id = exten;
+
+    await handlers.handleOpener(activeService);  // Handle opener for other services (like STORY, SCIENCE, etc.)
 }
 
 // =====================================================
@@ -328,65 +394,59 @@ async function writeWavFile(pcmData, id) {
 }
 
 async function speak(text) {
-  const s = cleanForSpeech(text);
-  if (!s) return;
+    console.log("SPEAKING TEXT:", text); // Add a log to check what text we're trying to speak
+    const s = cleanForSpeech(text);
 
-  const id = Date.now();
-
-  // Correct paths for the output sound files
-  const wavPath = path.join(__dirname, "asterisk-sounds", "en", `tts-${id}.wav`);
-  const ulawPath = path.join(__dirname, "asterisk-sounds", "en", `tts-${id}.ulaw`);
-
-  // Path for the queue file
-  const queueFilePath = path.join(__dirname, "asterisk-sounds", "en", "queue.txt");
-
-  //console.log("TTS START →", wavPath);
-
-  // Requesting WAV format from OpenAI
-  const speech = await openai.audio.speech.create({
-    model: "gpt-4o-mini-tts",
-    voice: currentVoice,
-    input: s,
-    format: "wav",  // Request WAV format from OpenAI
-  });
-
-  // Ensure the data is valid
-  const wavBuffer = Buffer.from(await speech.arrayBuffer());
-
-  // Check if wavBuffer is valid
-  if (!wavBuffer || wavBuffer.length === 0) {
-    console.error("Error: Received empty audio data from OpenAI.");
-    return;
-  }
-
-  // Create the WAV file first
-  fs.writeFileSync(wavPath, wavBuffer);  // Save the WAV file
-  //console.log("WAV data written to:", wavPath);
-
-  // Convert WAV to ULaw using FFmpeg
-  exec(
-    `ffmpeg -i ${wavPath} -ar 8000 -ac 1 -f mulaw ${ulawPath}`,
-    (err, stdout, stderr) => {
-      if (err) {
-        console.error("Error converting to ulaw:", stderr);
+    if (!s) {
+        console.log("Empty text passed to speak.");
         return;
-      }
-      //console.log("Converted to ulaw:", ulawPath);
-
-      // Check if the queue file exists, create it if not
-      if (!fs.existsSync(queueFilePath)) {
-        fs.writeFileSync(queueFilePath, '');  // Create an empty queue file if it doesn't exist
-        //console.log("Created new queue.txt file.");
-      }
-
-      // File is now ready for Asterisk to play in the 'en' folder
-      //console.log("File ready in the 'en' folder for Asterisk to play:", ulawPath);
-
-      // Add the converted file to the queue
-      fs.appendFileSync(queueFilePath, `tts-${id}\n`);
-      console.log("Sound queued:", `tts-${id}`);
     }
-  );
+
+    const baseDir = path.join(__dirname, "asterisk-sounds", "en");
+    const ctxPath  = path.join(baseDir, `${call.id}.ctx.txt`);
+    const wavPath  = path.join(baseDir, `${call.id}.out.wav`);
+    const ulawPath = path.join(baseDir, `${call.id}.out.ulaw`);
+
+    // Append text
+    fs.appendFileSync(ctxPath, s + "\n");
+
+    try {
+        // TTS → WAV chunk
+        const speech = await openai.audio.speech.create({
+            model: "gpt-4o-mini-tts",
+            voice: currentVoice,
+            input: s,
+            format: "wav",
+        });
+
+        const wavChunk = Buffer.from(await speech.arrayBuffer());
+        if (!wavChunk.length) {
+            console.log("No speech data returned.");
+            return;
+        }
+
+        // Append WAV chunk to the file
+        if (!fs.existsSync(wavPath)) {
+            // First chunk: full WAV
+            fs.writeFileSync(wavPath, wavChunk);
+        } else {
+            const pcm = wavChunk.subarray(44);
+            fs.appendFileSync(wavPath, pcm);
+        }
+
+        // Convert to final ulaw
+        await new Promise((resolve, reject) => {
+            exec(
+                `ffmpeg -y -i "${wavPath}" -ar 8000 -ac 1 -f mulaw "${ulawPath}"`,
+                err => (err ? reject(err) : resolve())
+            );
+        });
+
+        fs.unlinkSync(wavPath);
+
+    } catch (err) {
+        console.error("Error in speak:", err);
+    }
 }
 
 // =====================================================
@@ -439,6 +499,7 @@ async function routeIntentMasked(heardRaw) {
 // OPERATOR RESPONSE
 // =====================================================
 async function operatorChat(heardRaw) {
+    console.log("Handling Operator Chat for:", heardRaw); // Log the input
 
     try {
         const r = await openai.responses.create({
@@ -447,9 +508,7 @@ async function operatorChat(heardRaw) {
             max_output_tokens: 120,
             input: [{
                     role: "system",
-                    content: "You are a 1970s telephone operator. " +
-                        "Calm, efficient, polite. Slight warmth, total New York slang and style. " +
-                        "1–2 sentences."
+                    content: "You are a 1970s telephone operator. Calm, efficient, polite."
                 },
                 {
                     role: "user",
@@ -458,12 +517,14 @@ async function operatorChat(heardRaw) {
             ]
         });
 
-        const reply = (r.output_text || "")
-            .replace(/^operator:\s*/i, "")
-            .trim();
+        const reply = (r.output_text || "").replace(/^operator:\s*/i, "").trim();
+        console.log("Operator Response:", reply); // Log operator response
+
         await speak(reply);
-        addTurn(heardRaw, reply);
-    } finally {}
+        addTurn("[heard]", reply);
+    } catch (err) {
+        console.error("Error in operator chat:", err);
+    }
 }
 
 let audioQueue = Promise.resolve();
@@ -552,8 +613,8 @@ async function tellHoroscope(openai) {
             content: `You are Horoscopes-by-Phone, broadcasting live like a late-night AM radio show.\n` +
                 `Today is ${weekday}, ${month} ${day}. The stars are parked in ${sign}.\n\n` +
                 `Deliver ONE VERY short horoscope a single sentence for ${sign} with those funny words like mars is in retrograde, kudos if you know if it is and moon positions or astrological stuff.\n` +
-                `Richard Pryor raw adult humor and energy. Confident, mischievous, a little sexy.\n` +
-                `Open with the date and sign like a DJ, then hit the prediction.\n`
+                `Richard Pryor raw adult humor and energy. Confident, mischievous, a little zany.\n` +
+                `Open with today's date and astrological sign like a DJ would, then hit the prediction.\n`
         }]
     });
 
@@ -722,7 +783,7 @@ async function tellJoke(openai) {
         model: "gpt-4o-mini",
         input: [{
             role: "system",
-            content: "You are a Dial-a-Joke line. Tell ONE very short dirty adult entertaining raw and funny joke as Richard Pryor would on stage and stop. Be creative and unique and different."
+            content: "You are a Dial-a-Joke line. Tell ONE short animal joke. All jokes involve rodents, parrot droppings, geese, ungulates, goats, sheep barnyard animals and fun things kids things are fun and funny. Porcine, Skinks, Galliform, Lagomorph, Mustelid, Bovine ruminant,Proboscidean, Monkeys, Goose, Ursine etc. Chinchillas and worms and insects and dinosaurs. Lots of dinosaurs! Every Dino out there. Labubu or Picachu. Use funny science names like bovine instead of cow. Be creative and unique and different."
         }]
     });
     return (r.output_text || "").trim();
@@ -831,132 +892,108 @@ async function narrateWeather(openai, rawReport) {
 // =====================================================
 // CALL LOOP (DO NOT AUTO-START)
 // =====================================================
-async function runCall() {
-    currentVoice = OPERATOR_VOICES[
-        Math.floor(Math.random() * OPERATOR_VOICES.length)
-    ];
+
+async function hangupExtension(targetExtension) {
+    const auth = 'Basic ' + Buffer.from('1001:1234').toString('base64');
+    const baseUrl = 'http://192.168.1.161:8088/ari/channels'; // ARI endpoint for channels
 
     try {
+        // 1. Get all active channels
+        const listResponse = await fetch(baseUrl, {
+            method: 'GET',
+            headers: { 'Authorization': auth }
+        });
 
-        // GREETING — exactly once, before first listen
+        if (!listResponse.ok) {
+            console.error(`Error fetching channels: ${listResponse.statusText}`);
+            return;
+        }
+
+        const channels = await listResponse.json();
+
+        // 2. Find the channel matching the target extension
+        const channelToKill = channels.find(c => 
+            c.caller.number === targetExtension || c.connected.number === targetExtension
+        );
+
+        if (!channelToKill) {
+            console.log(`No active call found for extension ${targetExtension}`);
+            return;
+        }
+
+        // 3. Hang up the channel using its ID
+        const hangupUrl = `${baseUrl}/${channelToKill.id}/hangup`; // Correct URL to hang up the channel
+        const result = await fetch(hangupUrl, {
+            method: 'POST',  // POST is used to hang up the call
+            headers: { 'Authorization': auth }
+        });
+
+        if (result.status === 204) {
+            console.log(`Successfully hung up call for extension ${targetExtension} (Channel ID: ${channelToKill.id})`);
+        } else {
+            console.log(`Failed to hang up call for extension ${targetExtension}, Status: ${result.status}`);
+        }
+    } catch (err) {
+        console.error("Error during hangup:", err);
+    }
+}
+
+async function runCall(heardRaw) {
+    try {
         if (!call.greeted) {
-            call.greeted = true;
-
+            call.greeted = true;  // Mark that the greeting has been handled
+            call.history = [];  // Reset conversation history
             const svc = SERVICES[activeService];
             if (!svc) return;
 
-            // Set voice
-            if (svc.voice === "operator") {
-                currentVoice = operatorVoice;
-            } else {
-                currentVoice = svc.voice;
-            }
+            // Ensure the correct voice is set based on the active service
+            currentVoice = svc.voice === "operator" ? operatorVoice : svc.voice;
 
-            // ONE-SHOT SERVICES
             if (svc.type === "oneshot") {
-                await handlers[svc.handler]();
+                await handlers[svc.handler]();  // Handle oneshot services
                 return;
             }
 
-            // LOOP SERVICES
             if (svc.type === "loop") {
-                await handlers.handleOpener(activeService);
+                const opener = await handlers.handleOpener(activeService);
+                if (opener) {
+                    await speak(opener);  // Only speak the opener once
+                    addTurn("[opener]", opener);
+                }
             }
         }
 
-
-
-        let heardRaw = ""; // await transcribeFromFile("./asterisk-sounds/en/input.wav");
-
-        log("HEARD:", heardRaw);
-
-        // 1. Hard hangup
-        if (HANGUP_RE.test(heardRaw)) {
-            await speak("Alright. Goodbye.");
-            activeService = null;
-            return;
-        }
-
-        // 2. Weather follow-up special case
-        if (awaitingWeatherLocation) {
-            awaitingWeatherLocation = false;
-            const city = heardRaw.trim() || DEFAULT_WEATHER_CITY;
-
-            const report = await getWeatherReport(city);
-            if (!report) {
-                await speak("I couldn't find that location. Try saying the city and state.");
-                awaitingWeatherLocation = true;
-                return;
-            }
-
-            await speak(report);
-            await speak("Enjoy your day! Thanks for calling.");
-            return;
-        }
-
-        // 3. Silence
         if (!heardRaw) {
             await speak("Are you still there?");
             return;
         }
-
-        // 4. ACTIVE LOOP SERVICE ALWAYS GETS FIRST SHOT
-        if (await handlers.handleLoopTurn(activeService, heardRaw)) {
+        if (HANGUP_RE.test(heardRaw)) {
+            await speak("Alright. Goodbye.");
+            await hangupExtension(`${call.id}`); 
             return;
         }
 
-        // 5. Very short utterances → operator nudge
-        if (heardRaw.length < 2) {
-            await operatorChat(heardRaw);
-            return;
-        }
+        // Handle loop turn or specific service handling (e.g., SCIENCE, STORY)
+        if (await handlers.handleLoopTurn(activeService, heardRaw)) return;
 
-        // 6. Intent routing (ONLY for switching services)
+        // Service switching based on intent (if necessary)
         const intent = await routeIntentMasked(heardRaw);
-        log("INTENT:", intent);
-
-        // Generic intent → service dispatch
         if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
             const nextService = intent.action.replace("SERVICE_", "");
             const svc = SERVICES[nextService];
-
             if (svc) {
-                // If intent says the SAME loop service we're already in,
-                // do NOT restart/open it—just handle the turn inside the loop service.
-                if (nextService === activeService && svc.type === "loop") {
-                    await handlers.handleLoopTurn(activeService, heardRaw);
+                if (nextService !== activeService || svc.type !== "loop") {
+                    activeService = nextService;  // Switch active service
+                    currentVoice = svc.voice === "operator" ? operatorVoice : svc.voice;
+                    await handlers.handleLoopTurn(nextService);
                     return;
                 }
-
-                // If we're in a loop service, don't let OPERATOR steal the call
-                if (SERVICES[activeService]?.type === "loop" && nextService === "OPERATOR") {
-                    // ignore OPERATOR switch while in a loop service
-                } else {
-                    activeService = nextService;
-
-                    currentVoice = (svc.voice === "operator") ? operatorVoice : svc.voice;
-
-                    if (svc.type === "oneshot") {
-                        await handlers[svc.handler]();
-                        return;
-                    }
-
-                    if (svc.type === "loop") {
-                        await handlers.handleOpener(nextService);
-                        return;
-                    }
-                }
             }
-
-
-            // 7. Final fallback: operator chat
-
-            if (SERVICES[activeService]?.type === "loop") {
-                // Stay silent or let the loop service handle next turn
-                return;
-            }
-
-            await operatorChat(heardRaw);
         }
-    } finally {}
+
+        await operatorChat(heardRaw);  // Default fallback to operator chat
+
+    } catch (err) {
+        console.error("Error in runCall:", err);
+    }
 }
