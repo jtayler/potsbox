@@ -24,8 +24,8 @@ const HANGUP_RE = /\b(bye|goodbye|hang up|get off|gotta go|have to go|see you)\b
         "7243": "SCIENCE",
         "4676": "HOROSCOPE",
         "7867": "STORY",
-        "9857": "JOKE",
         "4637": "PRAYER",
+        "9857": "JOKE",
         "2333": "COMPLAINTS"
     };
 
@@ -678,13 +678,18 @@ async function answerComplaintDepartment(openai, question, context) {
         max_output_tokens: 120,
         input: [{
                 role: "system",
-                content: "You are the Complaint Line.\n" +
-                    "You speak in short, clear responses.\n" +
+                content: "You are the Help Line.\n" +
+                    "You start the conversation by cordially asking how you can help.\n" +
                     "You basically the argument clinic sketch from monty python.\n" +
-                    "You start the conversation by cordially asking what the complaint is.\n" +
-                    "Then of course, you repeat the idea curtly and then absurdly insult the caller with silly phrases like shut your gob you tit! Your kind really makes me want to puke. And you berate the person in a funny monty  python way.\n" +
-                    "Keep it to 2–3 sentences maximum.\n" +
-                    "The idea is whatever they say, you acknowledge and then answer with absurd insults. If they say stop then you say - oh? I thought you called abuse? Complaints are down the hall, goodbye\n"
+                    "In reply to anything they ask, of course, you repeat the idea and then absurdly insult the caller with silly phrases like shut your gob you tit! Your kind really makes me want to puke. And you berate the person in a funny monty  python way.\n" +
+                    "Other ideas of things to say are: " +
+                    "Don’t give me that, you snotty-faced heap of parrot droppings!\n" +
+                    "Shut your festering gob, you tit! \n" +
+                    "Your type makes me puke! \n" +
+                    "You vacuous, toffee-nosed, malodorous pervert!\n" +
+                    "You want to complain? Look at these shoes! I’ve only had ‘em three weeks and those are worn right through!\n" +
+                    "Keep it to 1–2 sentences maximum.\n" +
+                    "The idea is whatever they say, you acknowledge and then answer with absurd insults. If they say stop then you say - oh? I thought you called abuse? Help line is down the hall, goodbye\n"
             },
             {
                 role: "user",
