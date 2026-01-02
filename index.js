@@ -259,11 +259,11 @@ http.createServer(async (req, res) => {
 });
 
 function resetCallFiles(callId) {
-    const base = path.join(__dirname, "asterisk-sounds", "en");
-    for (const ext of ["ctx.txt", "out.wav", "out.ulaw"]) {
-        const p = path.join(base, `${callId}.${ext}`);
-        if (fs.existsSync(p)) fs.unlinkSync(p);
-    }
+  const base = path.join(__dirname, "asterisk-sounds", "en");
+  for (const ext of ["ctx.txt", "out.wav", "out.ulaw", "_in.wav", "_in.ulaw"]) {
+    const p = path.join(base, `${callId}${ext.startsWith("_") ? ext : "." + ext}`);
+    try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch {}
+  }
 }
 
 async function startCall({ exten }) {
