@@ -345,7 +345,7 @@ async function speak(text) {
             );
         });
 
-        //fs.unlinkSync(wavPath);
+        fs.unlinkSync(wavPath);
     } catch (err) {
         console.error("Error in speak:", err);
     }
