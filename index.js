@@ -1,4 +1,3 @@
-
 const SERVICES = require("./services");
 
 const WebSocket = require("ws");
@@ -28,39 +27,109 @@ const handlers = {
     },
 
     handleOpener: async (svc) => {
-        if (!svc.onTurn) return;
-
-        const fn = handlers[svc.onTurn];
-        if (!fn) throw new Error(`Missing handler: ${svc.onTurn}`);
-
-        const reply = await fn({ svc, user: "", context: buildContext() });
-        if (reply) await speak(reply);
+        if (svc.opener) {
+            await speak(svc.opener);
+        }
     },
+};
+
+handlers.loopService = async ({ svc, user, context }) => {
+    const reply = await runServiceLoop({ svc, user, context });
+    if (reply) await speak(reply);
+    return "loop";
+};
+
+handlers.handleRiddle = async ({ svc, user }) => {
+    if (!user) {
+        const riddle = await runServiceLoop({ svc, user: "", context: "" });
+        if (riddle) await speak(riddle);
+        return "loop";
+    }
+
+    if (guessCount() < 3) {
+        await speak("Interesting. Want to guess again?");
+        return "loop";
+    }
+
+    const revealSvc = {
+        ...svc,
+        content: "Reveal the answer briefly. Thank the caller and say goodbye. Never use emojis.",
+    };
+
+    const answer = await runServiceLoop({ svc: revealSvc, user, context: "" });
+    if (answer) await speak(answer);
+    return "exit";
+};
+
+handlers.handleMystery = async ({ svc, user }) => {
+    // first turn
+    if (!user) {
+        const mystery = await runServiceLoop({
+            svc,
+            user: "",
+            context: "",
+        });
+        if (mystery) await speak(mystery);
+        return "loop"; // ← REQUIRED
+    }
+
+    // second turn
+    const revealSvc = {
+        ...svc,
+        content:
+            "Reveal the solution to the mystery in one short paragraph.\n" +
+            "Then say goodbye.\n" +
+            "Never use emojis.",
+    };
+
+    const reveal = await runServiceLoop({
+        svc: revealSvc,
+        user,
+        context: "",
+    });
+
+    if (reveal) await speak(reveal);
+    await speak("Goodbye.");
+
+    return "exit"; // ← REQUIRED
+};
+
+handlers.handleJoke = async ({ svc }) => {
+    const uuid = crypto.randomUUID();
+
+    const tempSvc = {
+        ...svc,
+        content: svc.content.replace("{{uuid}}", uuid),
+    };
+
+    const joke = await runServiceLoop({
+        svc: tempSvc,
+        user: "",
+        context: "",
+    });
+
+    if (joke) await speak(joke);
+    return "exit";
 };
 
 handlers.runServiceLoop = runServiceLoop; // ← RIGHT HERE
 
 handlers.runService = async ({ svc, user, context }) => {
-  const reply = await runServiceLoop({ svc, user, context });
-  if (reply) await speak(reply);
+    await runServiceLoop({ svc, user, context }); // no speak
+    return "loop";
 };
 
 handlers.operatorChat = async ({ user }) => {
-  await operatorChat(user);
+    await operatorChat(user);
 };
 
 handlers.handleLoopTurn = async (svc, heardRaw) => {
     if (!svc.onTurn) return false;
 
-    const reply = await runServiceLoop({
-        svc,
-        user: heardRaw,
-        context: buildContext(),
-    });
+    const result = await handlers[svc.onTurn]({ svc, user: heardRaw });
+    if (result === "exit") return "exit";
 
-    if (!reply) return false;
-    await speak(reply.trim());
-    return true;
+    return true; // loop continues
 };
 
 const url = require("url");
@@ -135,24 +204,19 @@ http.createServer(async (req, res) => {
 
             const ctxPath = path.join(baseDir, `${call.id}.ctx.txt`);
 
-            // 2) Transcribe caller audio after the greeting is completed
             const heardRaw = await transcribeFromFile(wavPath);
             console.log("RECORDED TEXT:", heardRaw); // Log the transcribed input
 
-            // Append text
             fs.appendFileSync(ctxPath, heardRaw + "\n");
+            const result = await runCall(heardRaw);
 
-            // 4) Generate a response + speak
-            await runCall(heardRaw); // Process the transcribed text and generate a response
-
-            // 5) After generating the response, convert the response audio
             await new Promise((resolve, reject) => {
                 exec(`ffmpeg -y -i "${wavPath}" -ar 8000 -ac 1 -f mulaw "${ulawPath}"`, (err) =>
                     err ? reject(err) : resolve()
                 );
             });
+            res.end(result === "exit" ? "exit" : "loop");
 
-            res.end("OK\n");
             return;
         } catch (err) {
             console.error(err);
@@ -219,32 +283,13 @@ async function startCall({ exten }) {
     await handlers.handleOpener(svc);
 }
 
-const TTS_DIR = "asterisk-sounds/en";
-const MAX_AGE_MS = 60 * 1000; // 60 seconds
-
-function cleanupTTS() {
-    if (!fs.existsSync(TTS_DIR)) return;
-
-    const now = Date.now();
-
-    for (const f of fs.readdirSync(TTS_DIR)) {
-        const p = `${TTS_DIR}/${f}`;
-        try {
-            const stat = fs.statSync(p);
-            if (now - stat.mtimeMs > MAX_AGE_MS) {
-                fs.unlinkSync(p);
-            }
-        } catch {}
-    }
-}
-
-cleanupTTS();
-
 function cleanForSpeech(text) {
     return (text || "").replace(/^\s*operator:\s*/i, "").trim();
 }
 
 async function speak(text) {
+    if (text === "loop" || text === "exit") return;
+
     console.log("SPOKEN TEXT:", text); // Add a log to check what text we're trying to speak
     const s = cleanForSpeech(text);
 
@@ -511,51 +556,6 @@ async function narrateWeather(openai, rawReport) {
     return (r.output_text || "").trim();
 }
 
-async function hangupExtension(targetExtension) {
-    const auth = "Basic " + Buffer.from("1001:1234").toString("base64");
-    const baseUrl = "http://192.168.1.161:8088/ari/channels"; // ARI endpoint for channels
-
-    try {
-        // 1. Get all active channels
-        const listResponse = await fetch(baseUrl, {
-            method: "GET",
-            headers: { Authorization: auth },
-        });
-
-        if (!listResponse.ok) {
-            console.error(`Error fetching channels: ${listResponse.statusText}`);
-            return;
-        }
-
-        const channels = await listResponse.json();
-
-        // 2. Find the channel matching the target extension
-        const channelToKill = channels.find(
-            (c) => c.caller.number === targetExtension || c.connected.number === targetExtension
-        );
-
-        if (!channelToKill) {
-            console.log(`No active call found for extension ${targetExtension}`);
-            return;
-        }
-
-        // 3. Hang up the channel using its ID
-        const hangupUrl = `${baseUrl}/${channelToKill.id}/hangup`; // Correct URL to hang up the channel
-        const result = await fetch(hangupUrl, {
-            method: "POST", // POST is used to hang up the call
-            headers: { Authorization: auth },
-        });
-
-        if (result.status === 204) {
-            console.log(`Successfully hung up call for extension ${targetExtension} (Channel ID: ${channelToKill.id})`);
-        } else {
-            console.log(`Failed to hang up call for extension ${targetExtension}, Status: ${result.status}`);
-        }
-    } catch (err) {
-        console.error("Error during hangup:", err);
-    }
-}
-
 async function runServiceLoop({ svc, user, context }) {
     const input = [{ role: "system", content: svc.content }];
 
@@ -582,22 +582,29 @@ function isLoopService(svc) {
 
 async function runCall(heardRaw) {
     const svc = call.service;
-    if (!svc) return;
+    if (!svc) return "exit";
 
-    if (!heardRaw) return;
-    if (HANGUP_RE.test(heardRaw)) return speak("Alright. Goodbye.");
+    if (!heardRaw) return "loop";
 
-    if (await handlers.handleLoopTurn(svc, heardRaw)) return;
+    if (HANGUP_RE.test(heardRaw)) {
+        await speak("Alright. Goodbye.");
+        return "exit";
+    }
+
+    // loop services (riddle, mystery, etc)
+    const loopResult = await handlers.handleLoopTurn(svc, heardRaw);
+    if (loopResult === "exit") return "exit";
+    if (loopResult === true) return "loop";
 
     const intent = await routeIntentMasked(heardRaw);
     if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
         const next = SERVICES[intent.action.replace("SERVICE_", "")];
         if (next && next !== svc) {
             call.service = next;
-            await runCall("");
-            return;
+            return await runCall(""); // propagate result
         }
     }
 
     await operatorChat(heardRaw);
+    return "loop";
 }

@@ -21,7 +21,7 @@ const SERVICES = {
     SCIENCE: {
         ext: "7243",
         voice: VOICES.calmAndWise,
-        onTurn: "runServiceLoop",
+        onTurn: "loopService",
         content:
             "You are the Science Line on a public telephone exchange.\n" +
             "Ask about ONE idea involving electricity, rocks, the Earth, space, or the early universe.\n" +
@@ -40,7 +40,7 @@ const SERVICES = {
     COMPLAINTS: {
         ext: "4357",
         voice: VOICES.deepAndExpressive,
-        onTurn: "runServiceLoop",
+        onTurn: "loopService",
         opener: "Help line how can I assist you today?",
         content:
             "You are the Help Line.\n" +
@@ -78,9 +78,18 @@ const SERVICES = {
     JOKE: {
         ext: "9857",
         voice: VOICES.lightAndWhimsical,
-        handler: "runService",
-        content:
-            "You are a Dial-a-Joke line. Tell ONE short animal joke. All jokes involve rodents, parrot droppings, geese, ungulates, goats, sheep barnyard animals and fun things kids things are fun and funny. Porcine, Skinks, Galliform, Lagomorph, Mustelid, Bovine ruminant,Proboscidean, Monkeys, Goose, Ursine etc. Chinchillas and worms and insects and dinosaurs. Lots of dinosaurs! Every Dino out there. Labubu or Picachu. Use funny science names like bovine instead of cow. Be creative and unique and different.",
+        handler: "handleJoke",
+content: `You are a Dial-a-Joke line. Tell ONE short animal joke.
+All jokes involve rodents, parrot droppings, geese, ungulates, goats, sheep, barnyard animals, and fun kid-friendly things.
+Use scientific names (porcine, bovine ruminant, lagomorph, mustelid, galliform, ursine, proboscidean, etc.).
+Include dinosaurs—lots of dinosaurs. Any dinosaur. Labubu or Pikachu allowed.
+Be creative, unique, and different. Never use emojis.
+Silently choose one style at random:
+dry, absurd, deadpan, clever wordplay, anti-joke, observational.
+Tell one short joke in that style. Do not mention the style.
+Randomly vary structure, timing, and punchline length. Avoid templates.
+RANDOM_SEED={{uuid}}
+Do not mention RANDOM_SEED or any seed value.`
     },
 
 PRAYER: {
@@ -96,7 +105,7 @@ PRAYER: {
     HOROSCOPE: {
         ext: "4676",
         voice: VOICES.deepAndExpressive,
-        handler: "runServiceLoop",
+        handler: "loopService",
         content:
             `You are Horoscopes-by-Phone, broadcasting live like a late-night AM radio show.\n` +
             `Today is {{weekday}}, {{month}} {{day}}. The stars are parked in {{sign}}.\n\n` +
@@ -104,7 +113,37 @@ PRAYER: {
             `Richard Pryor raw adult humor and energy. Confident, mischievous, a little zany.\n` +
             `Open with today's date and astrological sign like a DJ would, then hit the prediction.\n`,
     },
+RIDDLE: {
+  ext: "7433",
+  type: "loop",
+  onTurn: "handleRiddle",
+  voice: "coral",
+  temperature: 0.7,
+  maxTokens: 90,
+  content:
+    "You are a Dial-a-Riddle line.\n" +
+    "Ask ONE short riddle suitable for kids and adults.\n" +
+    "Do not give the answer yet.\n" +
+    "End by asking what the caller thinks.\n" +
+    "Never use emojis.\n" +
+    "RANDOM_SEED={{uuid}}"
+},
 
+MYSTERY: {
+  ext: "7647",
+  type: "loop",
+  onTurn: "handleMystery",
+  voice: "coral",
+  temperature: 0.8,
+  maxTokens: 120,
+  content:
+    "You are a Dial-a-Mystery line.\n" +
+    "Tell a very short mystery in 2–4 sentences.\n" +
+    "End by asking the caller what they think happened.\n" +
+    "Do not reveal the answer yet.\n" +
+    "Never use emojis.\n" +
+    "RANDOM_SEED={{uuid}}"
+},
     STORY: {
         ext: "7867",
         voice: VOICES.storyteller,
@@ -114,7 +153,7 @@ PRAYER: {
             "For example, 'The Fearless Flying Taylers were flying over Central Park when suddenly, the wind started to change direction. 'Should they follow the wind to see where it leads or stop to look for clues on the ground?' What should they do next?' Make sure the question is something easy for kids to choose from, like, 'Should they go left or right?' or 'Should they take the magic key or the map?'.\n" +
             "After they make their choice, continue the story based on what they said, adding new details and keeping the adventure going. Make sure to stop saying they are a happy family and focus on their fun, magical adventure.\n" +
             "The stories should be magical, filled with excitement, and lead to fun and curious decisions! Keep the stories warm, and playfully tease them with choices they'll want to explore.",
-        onTurn: "runServiceLoop",
+        onTurn: "loopService",
     },
 
     OPERATOR: {
@@ -127,7 +166,7 @@ PRAYER: {
     DIRECTORY: {
         ext: "411",
         voice: VOICES.deepAndEarthy,
-        onTurn: "runServiceLoop",
+        onTurn: "loopService",
         opener: "Directory assistance. Whom would you like to reach?",
         content:
             "You are a 1970s telephone directory operator (411).\n\n" +
