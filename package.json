@@ -11,6 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "asterisk-ami-client": "^1.1.5",
     "mic": "^2.1.2",
     "node-fetch": "^3.3.2",
     "openai": "^6.15.0",

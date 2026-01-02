@@ -1,3 +1,18 @@
+const AmiClient = require("asterisk-ami-client");
+
+const ami = new AmiClient();
+
+ami.connect("node", "nodepass", {
+  host: "127.0.0.1",
+  port: 5038,
+})
+.then(() => {
+  console.log("AMI connected as node");
+})
+.catch(err => {
+  console.error("AMI connection failed", err);
+});
+
 const SERVICES = require("./services");
 
 const WebSocket = require("ws");
@@ -191,16 +206,51 @@ function buildContext() {
 }
 
 http.createServer(async (req, res) => {
+
+if (req.method === "POST" && req.url.startsWith("/call/dial")) {
+  try {
+    const { query } = url.parse(req.url, true);
+    const exten = (query.exten || "").trim();
+    if (!exten) {
+      res.statusCode = 400;
+      res.end("Missing exten\n");
+      return;
+    }
+
+    await originateCall({
+      exten,
+      channel: "PJSIP/1001",
+    });
+
+    res.end("DIALING\n");
+    return;
+  } catch (err) {
+    console.error(err);
+    res.statusCode = 500;
+    res.end("ERROR\n");
+    return;
+  }
+}
+
     if (req.method === "POST" && req.url.startsWith("/call/reply")) {
         try {
             const { query } = url.parse(req.url, true);
             const exten = (query.exten || "").trim();
+
+console.log("start call logic");
 
             call.id = exten;
 
             const baseDir = path.join(__dirname, "asterisk-sounds", "en");
             const ulawPath = path.join(baseDir, `${exten}_in.ulaw`);
             const wavPath = path.join(baseDir, `${exten}_in.wav`);
+            const outWav = path.join(baseDir, `${exten}.out.wav`);
+            const outUlaw = path.join(baseDir, `${exten}.out.ulaw`);
+
+try {
+  if (fs.existsSync(outWav))  fs.unlinkSync(outWav);
+console.log(outWav);
+} catch {}
 
             const ctxPath = path.join(baseDir, `${call.id}.ctx.txt`);
 
@@ -345,11 +395,20 @@ async function speak(text) {
             );
         });
 
-        fs.unlinkSync(wavPath);
     } catch (err) {
         console.error("Error in speak:", err);
     }
 }
+
+function originateCall({ exten }) {
+  return ami.send({
+Action: "Originate",
+Channel: "Local/7243@ai-phone",
+CallerID: "Science <7243>",
+Async: true
+  });
+}
+
 
 async function routeIntentMasked(heardRaw) {
     try {

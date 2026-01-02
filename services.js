@@ -39,7 +39,7 @@ const SERVICES = {
 
     COMPLAINTS: {
         ext: "4357",
-        voice: VOICES.deepAndExpressive,
+        voice: VOICES.boldAndClear,
         onTurn: "loopService",
         opener: "Help line how can I assist you today?",
         content:
