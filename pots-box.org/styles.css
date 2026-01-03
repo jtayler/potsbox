@@ -1,0 +1,76 @@
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0b0b0b;
+  color: #eaeaea;
+}
+
+.navbar {
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(6px);
+}
+
+.navbar-brand {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.navbar-brand span {
+  color: #ffc107;
+}
+
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  background:
+    radial-gradient(circle at top, #1c1c1c, #000);
+}
+
+.hero h1 {
+  font-size: 4rem;
+  letter-spacing: 0.15em;
+}
+
+.section {
+  padding: 6rem 0;
+}
+
+.section.alt {
+  background: #111;
+}
+
+.icon-hero {
+  color: #ffc107;
+  opacity: 0.9;
+}
+
+.btn-playing {
+  background-color: #dc3545 !important; /* red */
+  border-color: #dc3545 !important;
+  color: #fff;
+}
+
+.section h2 {
+  letter-spacing: 0.05em;
+}
+
+.footer {
+  padding: 3rem 0;
+  background: #000;
+  border-top: 1px solid #222;
+}
+
+a.btn {
+  border-radius: 50px;
+}
+
+.hero-logo {
+  font-size: clamp(3.5rem, 10vw, 6rem);
+  letter-spacing: 0.03em !important;
+  font-weight: 800;
+}
+
+.hero-logo span {
+  color: #ffc107;
+  letter-spacing: 0.05em;
+}

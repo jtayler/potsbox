@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title> PotsBox — Plain Old Telephone, Reimagined</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Font Awesome -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+  <!-- Custom CSS -->
+  <link href="styles.css" rel="stylesheet">
+
+<!-- Primary Meta -->
+<meta name="description" content="POTSBox turns classic analog telephones into living, talking museum pieces. Dial tones, operators, jokes, and services—no screens, just a phone and a voice." />
+<meta name="keywords" content="POTS, analog telephone, rotary phone, vintage phone, telephony, AT&T, dial tone, interactive art, museum tech" />
+<meta name="author" content="POTSBox" />
+
+<!-- Open Graph -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="POTSBox — Plain Old Telephone, Reimagined" />
+<meta property="og:description" content="Turning classic analog telephones into living, talking museum pieces." />
+<meta property="og:url" content="http://pots-box.org/" />
+<meta property="og:image" content="http://pots-box.org/images/rotaryphone-og.jpg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="POTSBox — Plain Old Telephone, Reimagined" />
+<meta name="twitter:description" content="Dial tones, operators, and living history—no screens required." />
+<meta name="twitter:image" content="http://pots-box.org/images/rotaryphone-og.jpg" />
+
+<link rel="icon" href="/favicon.ico" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+<link rel="manifest" href="/site.webmanifest" />
+
+<!-- Theme -->
+<meta name="theme-color" content="#000000" />
+
+</head>
+
+<body>
+
+<nav class="navbar navbar-dark navbar-expand-lg fixed-top">
+  <div class="container">
+    <a class="navbar-brand" href="#">POTS<span>Box</span></a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container text-center">
+<h1 class="hero-logo">
+  POTS<span>Box</span>
+</h1>
+    <p class="lead">
+      Turning your classic analog telephones into living, talking museum pieces that are a joy for family and friends.
+    </p>
+    <a href="#about" class="btn btn-outline-light btn-lg mt-3">
+<span onclick="playHoverClick()" style="cursor:pointer;">
+  <i class="fa-solid fa-phone"></i> Pick Up the Receiver
+</span>
+    </a>
+    <p class="lead pt-4">
+      I'll make you a believer.
+    </p>
+<div class="text-center mt-4">
+<button id="emergencyBtn" class="btn btn-warning btn-lg" onclick="playRandomSound()">
+  <i class="fa-solid fa-bell"></i> AT&T Emergency Broadcast
+</button>
+</div>
+
+  </div>
+</header>
+
+<section id="about" class="section">
+  <div class="container">
+    <div class="row g-5 align-items-center">
+      <div class="col-md-6">
+        <h2>What is PotsBox?</h2>
+        <p>
+          Your own, personal network.
+        </p>
+        <p>
+          <strong>POTS</strong> means <em>Plain Old Telephone Service</em> — the elegant,
+          electro-mechanical system that defined human communication for a century.
+        </p>
+        <p>
+          PotsBox lets you plug in real rotary and push-button phones and hear
+          dial tones, operators, jokes, weather, and services that feel
+          astonishingly alive — just like calling AT&amp;T, 411, or an operator in 1975.
+        </p>
+        <p>
+          No screens. No apps. Just a phone, a wire, and a voice on the other end.
+        </p>
+      </div>
+      <div class="col-md-6 text-center">
+        <i class="fa-solid fa-phone-volume fa-8x icon-hero"></i>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section alt">
+  <div class="container">
+    <div class="row g-4 text-center">
+      <div class="col-md-4">
+        <i class="fa-solid fa-phone-volume fa-4x p-4"></i>
+        <h5>Real Dial Tones</h5>
+        <p>Authentic sounds, pacing, and voice timing.</p>
+      </div>
+      <div class="col-md-4">
+        <i class="fa-solid fa-building-columns fa-4x p-4"></i>
+        <h5>Living History</h5>
+        <p>AT&amp;T, operators, 411, and the Tele-Revolution — reborn.</p>
+      </div>
+      <div class="col-md-4">
+        <i class="fa-solid fa-microchip fa-4x p-4"></i>
+        <h5>Modern Intelligence</h5>
+        <p>AI-powered voices hidden behind analog simplicity.</p>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<section class="section">
+  <div class="container text-center">
+    <h2>Analog Phones Were Different</h2>
+<div class="p-3 col-md-6 mx-auto text-center">
+  <img
+    src="./images/rotaryphone.jpg"
+    alt="Classic AT&T rotary telephone"
+    class="img-fluid d-block mx-auto rounded-4 shadow-sm"
+  />
+</div>
+
+    <p class="mt-3">
+      Telephones were immersive. 
+You could hear while talking.<br>
+      A lover's telephone call didn’t need stop and say “over.”
+      The circuit carried presence, it was magic.
+    </p>
+    <p>
+      PotsBox honors that perfection — and lets it speak again.
+    </p>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container text-center">
+
+    <div class="footer-fun mb-4">
+      <i class="fa-solid fa-face-grin"></i>
+      <span>Ridiculously fun. It makes people laugh.</span>
+    </div>
+
+    <p>
+      <strong>POTSBox</strong> — celebrating the greatest network ever built.
+    </p>
+    <small>
+      Plain Old Telephone Service. Perfected.
+    </small>
+
+  </div>
+</footer>
+
+<script src="./app.js" defer></script>
+
+</body>
+</html>
