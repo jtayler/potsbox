@@ -49,9 +49,11 @@ const handlers = {
 };
 
 handlers.handleOneShot = async ({ svc }) => {
-  const reply = await runServiceLoop({ svc });
-  if (reply) await speak(reply);
-  return "exit";
+    const reply = await runServiceLoop({ svc });
+    if (reply) await speak(reply);
+    if (svc.closer) await speak(svc.closer);
+
+    return "exit";
 };
 
 handlers.loopService = async ({ svc, user, context }) => {
@@ -264,23 +266,23 @@ function resetCallFiles(callId) {
 }
 
 async function startCall({ exten }) {
-  call.id = exten;
-  call.service = serviceForExten(exten);
-  const svc = call.service;
+    call.id = exten;
+    call.service = serviceForExten(exten);
+    const svc = call.service;
 
-  // Opener is terminal for this turn
-  if (svc.opener) {
-    await speak(svc.opener);
-    return;
-  }
+    // Opener is terminal for this turn
+    if (svc.opener) {
+        await speak(svc.opener);
+        return;
+    }
 
-  // No opener → first model turn
-  if (isLoopService(svc)) {
-    await handlers[svc.onTurn]({ svc, user: "" });
-  } else {
-    const fn = handlers[svc.handler];
-    if (fn) await fn({ svc });
-  }
+    // No opener → first model turn
+    if (isLoopService(svc)) {
+        await handlers[svc.onTurn]({ svc, user: "" });
+    } else {
+        const fn = handlers[svc.handler];
+        if (fn) await fn({ svc });
+    }
 }
 
 function buildMessages(svc) {
