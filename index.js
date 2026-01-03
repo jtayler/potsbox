@@ -49,9 +49,9 @@ const handlers = {
 };
 
 handlers.loopService = async ({ svc, user, context }) => {
-    const reply = await runServiceLoop({ svc, user, context });
-    if (reply) await speak(reply);
-    return "loop";
+  const reply = await runServiceLoop({ svc, user: user ?? "", context });
+  if (reply) await speak(reply);
+  return "loop";
 };
 
 handlers.handleRiddle = async ({ svc, user }) => {
@@ -259,12 +259,6 @@ console.log(outWav);
 
             fs.appendFileSync(ctxPath, heardRaw + "\n");
             const result = await runCall(heardRaw);
-
-            await new Promise((resolve, reject) => {
-                exec(`ffmpeg -y -i "${wavPath}" -ar 8000 -ac 1 -f mulaw "${ulawPath}"`, (err) =>
-                    err ? reject(err) : resolve()
-                );
-            });
             res.end(result === "exit" ? "exit" : "loop");
 
             return;
@@ -331,6 +325,13 @@ async function startCall({ exten }) {
     }
 
     await handlers.handleOpener(svc);
+
+  const first = await handlers[svc.onTurn]({
+    svc,
+    user: "",          // empty user = “first turn”
+    context: buildContext(),
+  });
+
 }
 
 function cleanForSpeech(text) {
@@ -643,8 +644,6 @@ async function runCall(heardRaw) {
     const svc = call.service;
     if (!svc) return "exit";
 
-    if (!heardRaw) return "loop";
-
     if (HANGUP_RE.test(heardRaw)) {
         await speak("Alright. Goodbye.");
         return "exit";
@@ -658,10 +657,24 @@ async function runCall(heardRaw) {
     const intent = await routeIntentMasked(heardRaw);
     if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
         const next = SERVICES[intent.action.replace("SERVICE_", "")];
-        if (next && next !== svc) {
-            call.service = next;
-            return await runCall(""); // propagate result
-        }
+if (next && next !== svc) {
+    call.service = next;
+
+    if (isLoopService(next)) {
+        await handlers.handleOpener(next);
+        await handlers[next.onTurn]({
+            svc: next,
+            user: "",
+            context: buildContext(),
+        });
+        return "loop";
+    }
+
+    // one-shot service
+    const fn = handlers[next.handler];
+    if (fn) await fn({ svc: next, user: "", context: buildContext() });
+    return "exit";
+}
     }
 
     await operatorChat(heardRaw);
