@@ -22,7 +22,7 @@ const path = require("path");
 const fs = require("fs");
 const mic = require("mic");
 const OpenAI = require("openai");
-const { exec } = require("child_process");
+const { exec, execSync } = require("child_process");
 const crypto = require("crypto");
 const HANGUP_RE = /\b(bye|goodbye|hang up|get off|gotta go|have to go|see you)\b/i;
 
@@ -204,6 +204,13 @@ http.createServer(async (req, res) => {
                 console.log(outWav);
             } catch {}
 
+
+if (isTooQuiet(wavPath)) {
+  await speak("Sorry, I didn’t catch that can you speak a bit louder please.");
+  res.end("loop");
+  return;
+}
+
             const ctxPath = path.join(baseDir, `${call.id}.ctx.txt`);
 
             const heardRaw = await transcribeFromFile(wavPath);
@@ -299,6 +306,35 @@ function buildMessages(svc) {
     return messages;
 }
 
+
+function isTooQuiet(wavPath) {
+  const volume = -30; // try -30, -28, -25
+  try {
+    const cmd = `ffmpeg -hide_banner -nostats -i "${wavPath}" -af volumedetect -f null /dev/null 2>&1`;
+    const out = execSync(cmd).toString();
+
+    // DEBUG: dump analyzer output
+    console.log("VOLUME ANALYSIS:");
+    console.log(out);
+
+    const match = out.match(/max_volume:\s*(-?\d+(\.\d+)?) dB/);
+    if (!match) {
+      console.log("No max_volume found → treating as silence");
+      return true;
+    }
+
+    const maxDb = parseFloat(match[1]);
+
+    console.log(`Detected max volume: ${maxDb} dB`);
+    console.log(`Threshold: ${volume} dB`);
+
+    return maxDb < volume;
+  } catch (err) {
+    console.error("Volume detect failed:", err.message);
+    return true;
+  }
+}
+
 function cleanForSpeech(text) {
     return (text || "").replace(/^\s*operator:\s*/i, "").trim();
 }
@@ -308,6 +344,10 @@ async function speak(text) {
 
     console.log("SPOKEN TEXT:", text); // Add a log to check what text we're trying to speak
     const s = cleanForSpeech(text);
+
+function assistantEndedCall(text) {
+  return /\b(goodbye|good-bye|that’s all|thats all|farewell|hang up)\b/i.test(text);
+}
 
     if (!s) {
         console.log("Empty text passed to speak.");

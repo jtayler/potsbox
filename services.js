@@ -2,18 +2,18 @@
 // No logic. No side effects.
 
 const VOICES = {
-    deepAndExpressive: "ballad", // Corresponds to "Deep and expressive"
-    warmAndFriendly: "ash", // Corresponds to "Warm and friendly"
-    lightAndWhimsical: "coral", // Corresponds to "Light and whimsical"
-    crispAndClean: "echo", // Corresponds to "Crisp and clean"
-    storyteller: "fable", // Corresponds to "Storyteller, soft and inviting"
-    boldAndClear: "nova", // Corresponds to "Bold and clear"
-    strongAndSteady: "onyx", // Corresponds to "Strong and steady"
-    calmAndWise: "sage", // Corresponds to "Calm and wise"
-    softAndDelicate: "shimmer", // Corresponds to "Soft and delicate"
-    poeticAndRhythmic: "verse", // Corresponds to "Poetic, rhythmic"
-    brightAndFresh: "marin", // Corresponds to "Bright and fresh"
-    deepAndEarthy: "cedar", // Corresponds to "Deep and earthy"
+    deepAndExpressive: "ballad", // Professional yet personal; optimized for dynamic conversation"
+    warmAndFriendly: "ash", // Expressive, natural, and warm
+    lightAndWhimsical: "coral", // Female Clear, cheerful, and articulate"
+    crispAndClean: "echo", // Confident, deep, and authoritative"
+    storyteller: "fable", // Female Descriptive and British-inflected; often used for storytelling"
+    boldAndClear: "nova", // Female Bright, energetic, and youthful"
+    strongAndSteady: "onyx", // Deep, resonant, and calm"
+    calmAndWise: "sage", // Female Approachable, open, and friendly"
+    softAndDelicate: "shimmer", // Female Sophisticated and clear with a slightly higher pitch"
+    poeticAndRhythmic: "verse", // Poetic and rhythmic; designed for more emotional range"
+    brightAndFresh: "marin", // Female Introduced in late 2025 as one of the most realistic, natural-sounding voices"
+    deepAndEarthy: "cedar", // A newer high-quality voice known for its "best-in-class" naturalness and professional tone"
 };
 
 // Services structure (single source of truth)
@@ -42,7 +42,7 @@ End each response with a short follow-up question.
 
     COMPLAINTS: {
         ext: "4357",
-        voice: VOICES.deepAndEarthy,
+        voice: VOICES.deepAndExpressive,
         onTurn: "loopService",
         opener: "Help line how can I assist you today?",
         closer: "Oh, sorry this is abuse go down the hall to the right, thanks you goodbye.",
@@ -58,7 +58,7 @@ End each response with a short follow-up question.
             "You want to complain? Look at these shoes! I’ve only had ‘em three weeks and those are worn right through!\n" +
             "Use RANDOM_SEED={{uuid}} to introduce subtle randomness in content selection and phrasing\n" +
             "Keep it to 1–2 sentences maximum.\n" +
-            "The idea is whatever they say, you acknowledge and then answer with absurd insults. If they say stop then you say - oh? I thought you called abuse? Help line is down the hall, goodbye\n",
+            "The idea is whatever they say, you acknowledge and then answer with absurd insults. British-style politeness. If they say stop or goodbye or complain then you say - oh? I thought you called abuse? Help line is down the hall, goodbye\n",
     },
 
     TIME: {
@@ -199,7 +199,7 @@ Do not mention RANDOM_SEED or any seed value.`,
 "- I’m afraid we’re fresh out of open lines to that region, sir.\n" +
 "- We never have connections there at the end of the week, sir. We get them fresh on Monday.\n" +
 "- Ah! No, out of open lines. It’s been on order for two weeks—was expecting it this morning.\n" +
-"- Sorry, sir.\n" +
+"- So Sorry, cat's eaten it. \n" +
 "- Normally yes, sir. Today the van broke down.\n\n" +
 "Use RANDOM_SEED={{uuid}} to introduce subtle randomness in content selection and phrasing.\n" +
 "Do NOT mention the seed or randomness.\n"
