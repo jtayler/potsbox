@@ -32,13 +32,15 @@ const handlers = {
         await speak(`At the tone, the time will be ${time} and ${secondsToWords(seconds)}.`);
         await speak("BEEEP!");
         await speak("Goodbye.");
+        if (svc.closer) await speak(svc.closer);
     },
 
     handleWeather: async ({ svc }) => {
         const report = await getWeatherReport(DEFAULT_WEATHER_CITY);
         if (!report) return speak("Weather service is temporarily unavailable.");
         await speak(await narrateWeather(openai, report));
-        await speak("Remember folks, if you don't like the weather, wait five minutes. Good-bye.");
+        await speak("Remember folks, if you don't like the weather, wait five minutes.");
+        if (svc.closer) await speak(svc.closer);
     },
 
     handleOpener: async (svc) => {
@@ -51,7 +53,7 @@ const handlers = {
 handlers.handleOneShot = async ({ svc }) => {
     const reply = await runServiceLoop({ svc });
     if (reply) await speak(reply);
-    //if (svc.closer) await speak(svc.closer);
+    if (svc.closer) await speak(svc.closer);
 
     return "exit";
 };
@@ -264,7 +266,8 @@ if (isTooQuiet(wavPath)) {
 
 function resetCallFiles(callId) {
     const base = path.join(__dirname, "asterisk-sounds", "en");
-    for (const ext of ["ctx.txt", "out.wav", "out.ulaw", "_in.wav", "_in.ulaw"]) {
+
+    for (const ext of ["ctx.txt", "ctx.jsonl", "out.wav", "out.ulaw", "_in.wav", "_in.ulaw"]) {
         const p = path.join(base, `${callId}${ext.startsWith("_") ? ext : "." + ext}`);
         try {
             if (fs.existsSync(p)) fs.unlinkSync(p);
@@ -339,15 +342,15 @@ function cleanForSpeech(text) {
     return (text || "").replace(/^\s*operator:\s*/i, "").trim();
 }
 
+function assistantEndedCall(text) {
+  return /\b(goodbye|good-bye|that’s all|thats all|farewell|hang up)\b/i.test(text);
+}
+
 async function speak(text) {
     if (text === "loop" || text === "exit") return;
 
     console.log("SPOKEN TEXT:", text); // Add a log to check what text we're trying to speak
     const s = cleanForSpeech(text);
-
-function assistantEndedCall(text) {
-  return /\b(goodbye|good-bye|that’s all|thats all|farewell|hang up)\b/i.test(text);
-}
 
     if (!s) {
         console.log("Empty text passed to speak.");
@@ -400,6 +403,12 @@ function assistantEndedCall(text) {
                 err ? reject(err) : resolve()
             );
         });
+
+if (assistantEndedCall(s)) {
+  console.log("Assistant ended call.");
+  call._assistantEnded = true;
+}
+
     } catch (err) {
         console.error("Error in speak:", err);
     }
@@ -576,9 +585,12 @@ async function runCall(heardRaw) {
     }
 
     // loop services (riddle, mystery, etc)
-    const loopResult = await handlers.handleLoopTurn(svc, heardRaw);
-    if (loopResult === "exit") return "exit";
-    if (loopResult === true) return "loop";
+const loopResult = await handlers.handleLoopTurn(svc, heardRaw);
+if (loopResult === "exit") return "exit";
+if (loopResult === true) {
+  if (call._assistantEnded) { call._assistantEnded = false; return "exit"; }
+  return "loop";
+}
 
     const intent = await routeIntentMasked(heardRaw);
     if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
@@ -604,5 +616,11 @@ async function runCall(heardRaw) {
     }
 
     await operatorChat(heardRaw);
+
+if (call._assistantEnded) {
+  call._assistantEnded = false;
+  return "exit";
+}
+
     return "loop";
 }
