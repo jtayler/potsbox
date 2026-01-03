@@ -51,7 +51,7 @@ const handlers = {
 handlers.handleOneShot = async ({ svc }) => {
     const reply = await runServiceLoop({ svc });
     if (reply) await speak(reply);
-    if (svc.closer) await speak(svc.closer);
+    //if (svc.closer) await speak(svc.closer);
 
     return "exit";
 };
@@ -374,47 +374,19 @@ function originateCall({ exten }) {
     });
 }
 
-async function routeIntentMasked(heardRaw) {
-    try {
-        const r = await openai.responses.create({
-            max_output_tokens: 40,
-            temperature: 0,
-            model: "gpt-4o-mini",
-            text: {
-                format: {
-                    type: "json_object",
-                },
-            },
-            input: [
-                {
-                    role: "system",
-                    content:
-                        "You are a telephone exchange controller.\n" +
-                        "Decide the caller's intent.\n\n" +
-                        "Actions:\n" +
-                        "- SERVICE_TIME\n" +
-                        "- SERVICE_WEATHER\n" +
-                        "- SERVICE_JOKE\n" +
-                        "- SERVICE_PRAYER\n" +
-                        "- SERVICE_HOROSCOPE\n" +
-                        "- SERVICE_COMPLAINTS\n" +
-                        "- SERVICE_SCIENCE\n" +
-                        "- SERVICE_STORY\n" +
-                        "- SERVICE_DIRECTORY\n" +
-                        "- OPERATOR_CHAT\n\n" +
-                        "Return JSON only:\n" +
-                        '{ "action": string, "confidence": number }',
-                },
-                {
-                    role: "user",
-                    content: heardRaw,
-                },
-            ],
-        });
+async function transferCall(exten) {
+  return ami.send({
+    Action: "Originate",
+    Channel: `Local/${exten}@ai-phone`,
+    CallerID: `${exten}`,
+    Async: true,
+  });
+}
 
-        return JSON.parse(r.output_text || "{}");
-    } finally {
-    }
+function serviceFromIntent(action) {
+  if (!action?.startsWith("SERVICE_")) return null;
+  const key = action.replace("SERVICE_", "");
+  return SERVICES[key] || null;
 }
 
 async function operatorChat(heardRaw) {
