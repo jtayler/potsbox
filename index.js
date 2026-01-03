@@ -3,15 +3,15 @@ const AmiClient = require("asterisk-ami-client");
 const ami = new AmiClient();
 
 ami.connect("node", "nodepass", {
-  host: "127.0.0.1",
-  port: 5038,
+    host: "127.0.0.1",
+    port: 5038,
 })
-.then(() => {
-  console.log("AMI connected as node");
-})
-.catch(err => {
-  console.error("AMI connection failed", err);
-});
+    .then(() => {
+        console.log("AMI connected as node");
+    })
+    .catch((err) => {
+        console.error("AMI connection failed", err);
+    });
 
 const SERVICES = require("./services");
 
@@ -48,10 +48,16 @@ const handlers = {
     },
 };
 
-handlers.loopService = async ({ svc, user, context }) => {
-  const reply = await runServiceLoop({ svc, user: user ?? "", context });
+handlers.handleOneShot = async ({ svc }) => {
+  const reply = await runServiceLoop({ svc });
   if (reply) await speak(reply);
-  return "loop";
+  return "exit";
+};
+
+handlers.loopService = async ({ svc, user, context }) => {
+    const reply = await runServiceLoop({ svc, user: user ?? "", context });
+    if (reply) await speak(reply);
+    return "loop";
 };
 
 handlers.handleRiddle = async ({ svc, user }) => {
@@ -76,67 +82,7 @@ handlers.handleRiddle = async ({ svc, user }) => {
     return "exit";
 };
 
-handlers.handleMystery = async ({ svc, user }) => {
-    // first turn
-    if (!user) {
-        const mystery = await runServiceLoop({
-            svc,
-            user: "",
-            context: "",
-        });
-        if (mystery) await speak(mystery);
-        return "loop"; // ← REQUIRED
-    }
-
-    // second turn
-    const revealSvc = {
-        ...svc,
-        content:
-            "Reveal the solution to the mystery in one short paragraph.\n" +
-            "Then say goodbye.\n" +
-            "Never use emojis.",
-    };
-
-    const reveal = await runServiceLoop({
-        svc: revealSvc,
-        user,
-        context: "",
-    });
-
-    if (reveal) await speak(reveal);
-    await speak("Goodbye.");
-
-    return "exit"; // ← REQUIRED
-};
-
-handlers.handleJoke = async ({ svc }) => {
-    const uuid = crypto.randomUUID();
-
-    const tempSvc = {
-        ...svc,
-        content: svc.content.replace("{{uuid}}", uuid),
-    };
-
-    const joke = await runServiceLoop({
-        svc: tempSvc,
-        user: "",
-        context: "",
-    });
-
-    if (joke) await speak(joke);
-    return "exit";
-};
-
 handlers.runServiceLoop = runServiceLoop; // ← RIGHT HERE
-
-handlers.runService = async ({ svc, user, context }) => {
-    await runServiceLoop({ svc, user, context }); // no speak
-    return "loop";
-};
-
-handlers.operatorChat = async ({ user }) => {
-    await operatorChat(user);
-};
 
 handlers.handleLoopTurn = async (svc, heardRaw) => {
     if (!svc.onTurn) return false;
@@ -196,6 +142,11 @@ const call = {
     service: null,
 };
 
+function appendCtx(role, content) {
+    const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.jsonl`);
+    fs.appendFileSync(ctxPath, JSON.stringify({ role, content }) + "\n");
+}
+
 function buildContext() {
     const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.txt`);
 
@@ -206,38 +157,37 @@ function buildContext() {
 }
 
 http.createServer(async (req, res) => {
+    if (req.method === "POST" && req.url.startsWith("/call/dial")) {
+        try {
+            const { query } = url.parse(req.url, true);
+            const exten = (query.exten || "").trim();
+            if (!exten) {
+                res.statusCode = 400;
+                res.end("Missing exten\n");
+                return;
+            }
 
-if (req.method === "POST" && req.url.startsWith("/call/dial")) {
-  try {
-    const { query } = url.parse(req.url, true);
-    const exten = (query.exten || "").trim();
-    if (!exten) {
-      res.statusCode = 400;
-      res.end("Missing exten\n");
-      return;
+            await originateCall({
+                exten,
+                channel: "PJSIP/1001",
+            });
+
+            res.end("DIALING\n");
+            return;
+        } catch (err) {
+            console.error(err);
+            res.statusCode = 500;
+            res.end("ERROR\n");
+            return;
+        }
     }
-
-    await originateCall({
-      exten,
-      channel: "PJSIP/1001",
-    });
-
-    res.end("DIALING\n");
-    return;
-  } catch (err) {
-    console.error(err);
-    res.statusCode = 500;
-    res.end("ERROR\n");
-    return;
-  }
-}
 
     if (req.method === "POST" && req.url.startsWith("/call/reply")) {
         try {
             const { query } = url.parse(req.url, true);
             const exten = (query.exten || "").trim();
 
-console.log("start call logic");
+            console.log("start call logic");
 
             call.id = exten;
 
@@ -247,17 +197,17 @@ console.log("start call logic");
             const outWav = path.join(baseDir, `${exten}.out.wav`);
             const outUlaw = path.join(baseDir, `${exten}.out.ulaw`);
 
-try {
-  if (fs.existsSync(outWav))  fs.unlinkSync(outWav);
-console.log(outWav);
-} catch {}
+            try {
+                if (fs.existsSync(outWav)) fs.unlinkSync(outWav);
+                console.log(outWav);
+            } catch {}
 
             const ctxPath = path.join(baseDir, `${call.id}.ctx.txt`);
 
             const heardRaw = await transcribeFromFile(wavPath);
             console.log("RECORDED TEXT:", heardRaw); // Log the transcribed input
 
-            fs.appendFileSync(ctxPath, heardRaw + "\n");
+            appendCtx("user", heardRaw);
             const result = await runCall(heardRaw);
             res.end(result === "exit" ? "exit" : "loop");
 
@@ -281,6 +231,7 @@ console.log(outWav);
             resetCallFiles(call.id);
 
             // ONLY greet / opener — no transcription here
+
             await startCall({ exten });
             if (isLoopService(call.service)) {
                 res.end("loop");
@@ -303,35 +254,47 @@ console.log(outWav);
 });
 
 function resetCallFiles(callId) {
-  const base = path.join(__dirname, "asterisk-sounds", "en");
-  for (const ext of ["ctx.txt", "out.wav", "out.ulaw", "_in.wav", "_in.ulaw"]) {
-    const p = path.join(base, `${callId}${ext.startsWith("_") ? ext : "." + ext}`);
-    try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch {}
-  }
+    const base = path.join(__dirname, "asterisk-sounds", "en");
+    for (const ext of ["ctx.txt", "out.wav", "out.ulaw", "_in.wav", "_in.ulaw"]) {
+        const p = path.join(base, `${callId}${ext.startsWith("_") ? ext : "." + ext}`);
+        try {
+            if (fs.existsSync(p)) fs.unlinkSync(p);
+        } catch {}
+    }
 }
 
 async function startCall({ exten }) {
-    call.id = exten;
-    call.greeted = false;
+  call.id = exten;
+  call.service = serviceForExten(exten);
+  const svc = call.service;
 
-    call.service = serviceForExten(exten);
-    const svc = call.service;
+  // Opener is terminal for this turn
+  if (svc.opener) {
+    await speak(svc.opener);
+    return;
+  }
 
-    if (!isLoopService(svc)) {
-        const fn = handlers[svc.handler];
-        if (fn) await fn({ svc, user: "", context: buildContext() });
-        if (svc.goodbye) await speak(svc.goodbye);
-        return;
+  // No opener → first model turn
+  if (isLoopService(svc)) {
+    await handlers[svc.onTurn]({ svc, user: "" });
+  } else {
+    const fn = handlers[svc.handler];
+    if (fn) await fn({ svc });
+  }
+}
+
+function buildMessages(svc) {
+    const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.jsonl`);
+    const messages = [{ role: "system", content: replaceTokens(svc.content, svc) }];
+
+    if (!fs.existsSync(ctxPath)) return messages;
+
+    const lines = fs.readFileSync(ctxPath, "utf8").split("\n").filter(Boolean);
+    for (const line of lines) {
+        messages.push(JSON.parse(line));
     }
 
-    await handlers.handleOpener(svc);
-
-  const first = await handlers[svc.onTurn]({
-    svc,
-    user: "",          // empty user = “first turn”
-    context: buildContext(),
-  });
-
+    return messages;
 }
 
 function cleanForSpeech(text) {
@@ -355,7 +318,7 @@ async function speak(text) {
     const ulawPath = path.join(baseDir, `${call.id}.out.ulaw`);
 
     // Append text
-    fs.appendFileSync(ctxPath, s + "\n");
+    appendCtx("assistant", s);
 
     try {
         // TTS → WAV chunk
@@ -395,21 +358,19 @@ async function speak(text) {
                 err ? reject(err) : resolve()
             );
         });
-
     } catch (err) {
         console.error("Error in speak:", err);
     }
 }
 
 function originateCall({ exten }) {
-  return ami.send({
-Action: "Originate",
-Channel: "Local/7243@ai-phone",
-CallerID: "Science <7243>",
-Async: true
-  });
+    return ami.send({
+        Action: "Originate",
+        Channel: "Local/7243@ai-phone",
+        CallerID: "Science <7243>",
+        Async: true,
+    });
 }
-
 
 async function routeIntentMasked(heardRaw) {
     try {
@@ -531,68 +492,26 @@ async function transcribeFromFile(path) {
     return (stt.text || "").replace(/[^\w\s,.!?-]/g, "").trim(); // Remove anything not a standard character
 }
 
-async function streamTranscribe() {
-    // Record a short utterance into memory (no files), stop on silence
-    const wavBuffer = await new Promise((resolve) => {
-        const chunks = [];
+function replaceTokens(content, svc = {}) {
+    if (!content) return content;
 
-        const micInstance = mic({
-            rate: "16000",
-            channels: "1",
-            // IMPORTANT: mic expects integer seconds here; 0 disables silence stop.
-            exitOnSilence: 6,
-            fileType: "wav",
-        });
+    const now = new Date();
+    const uuid = crypto.randomUUID();
 
-        const micStream = micInstance.getAudioStream();
+    const tokens = {
+        "{{uuid}}": uuid,
+        "{{weekday}}": now.toLocaleDateString("en-US", { weekday: "long" }),
+        "{{month}}": now.toLocaleDateString("en-US", { month: "long" }),
+        "{{day}}": now.getDate(),
+        "{{sign}}": zodiacSignForDate(now),
+    };
 
-        const hardStop = setTimeout(() => {
-            try {
-                micInstance.stop();
-            } catch {}
-        }, 6000);
+    let out = content;
+    for (const [k, v] of Object.entries(tokens)) {
+        out = out.replaceAll(k, String(v));
+    }
 
-        micStream.on("data", (d) => chunks.push(d));
-
-        // Works on many setups; if it doesn't, the hardStop still ends it.
-        micStream.on("silence", () => {
-            try {
-                micInstance.stop();
-            } catch {}
-        });
-
-        micStream.on("error", () => {
-            clearTimeout(hardStop);
-            resolve(Buffer.alloc(0));
-        });
-
-        micStream.on("stopComplete", () => {
-            clearTimeout(hardStop);
-            resolve(Buffer.concat(chunks));
-        });
-
-        // Fallback: some installs don't emit stopComplete reliably
-        micStream.on("close", () => {
-            clearTimeout(hardStop);
-            resolve(Buffer.concat(chunks));
-        });
-
-        micInstance.start();
-    });
-
-    if (!wavBuffer || wavBuffer.length === 0) return "";
-
-    // Node 20 has File built-in; OpenAI SDK accepts File
-    const file = new File([wavBuffer], "input.wav", {
-        type: "audio/wav",
-    });
-
-    const stt = await openai.audio.transcriptions.create({
-        file,
-        model: "gpt-4o-mini-transcribe",
-    });
-
-    return (stt.text || "").trim();
+    return out;
 }
 
 async function narrateWeather(openai, rawReport) {
@@ -616,21 +535,14 @@ async function narrateWeather(openai, rawReport) {
     return (r.output_text || "").trim();
 }
 
-async function runServiceLoop({ svc, user, context }) {
-    const input = [{ role: "system", content: svc.content }];
-
-    if (user !== undefined) {
-        input.push({
-            role: "user",
-            content: context ? `Conversation so far:\n${context}\n\nCaller:\n${user}` : user,
-        });
-    }
+async function runServiceLoop({ svc }) {
+    const messages = buildMessages(svc);
 
     const r = await openai.responses.create({
         model: "gpt-4o-mini",
         temperature: svc.temperature ?? 0.8,
         max_output_tokens: svc.maxTokens ?? 120,
-        input,
+        input: messages,
     });
 
     return (r.output_text || "").trim();
@@ -657,24 +569,24 @@ async function runCall(heardRaw) {
     const intent = await routeIntentMasked(heardRaw);
     if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
         const next = SERVICES[intent.action.replace("SERVICE_", "")];
-if (next && next !== svc) {
-    call.service = next;
+        if (next && next !== svc) {
+            call.service = next;
 
-    if (isLoopService(next)) {
-        await handlers.handleOpener(next);
-        await handlers[next.onTurn]({
-            svc: next,
-            user: "",
-            context: buildContext(),
-        });
-        return "loop";
-    }
+            if (isLoopService(next)) {
+                await handlers.handleOpener(next);
+                await handlers[next.onTurn]({
+                    svc: next,
+                    user: "",
+                    context: buildContext(),
+                });
+                return "loop";
+            }
 
-    // one-shot service
-    const fn = handlers[next.handler];
-    if (fn) await fn({ svc: next, user: "", context: buildContext() });
-    return "exit";
-}
+            // one-shot service
+            const fn = handlers[next.handler];
+            if (fn) await fn({ svc: next, user: "", context: buildContext() });
+            return "exit";
+        }
     }
 
     await operatorChat(heardRaw);

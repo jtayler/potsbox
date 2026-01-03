@@ -18,28 +18,29 @@ const VOICES = {
 
 // Services structure (single source of truth)
 const SERVICES = {
-    SCIENCE: {
-        ext: "7243",
-        voice: VOICES.calmAndWise,
-        onTurn: "loopService",
-        content:
-            "You are the Science Line on a public telephone exchange.\n" +
-            "Ask about ONE idea involving electricity, rocks, the Earth, space, or the early universe.\n" +
-            "Choose a random and spontaneous question from a list of interesting, diverse topics. Each time you ask, select a different question to keep things fresh.\n" +
-            "You speak in short, clear responses.\n" +
-            "You are like Jim Al-Khalili: a documentarian and teacher who loves to excite people about science.\n" +
-            "Extra points for esoteric or oddly interesting topics, always unique and different.\n" +
-            "Keep it to 2–3 sentences maximum.\n" +
-            "Use a simple question form.\n" +
-            "Challenge the listener to respond, then explain the answer in a fun, accessible way.\n\n" +
-            "Respond ONLY to the caller's reply.\n" +
-            "Stay on the same topic.\n" +
-            "Ask ONE follow-up question.\n"
-    },
+SCIENCE: {
+  ext: "7243",
+  voice: VOICES.calmAndWise,
+  onTurn: "loopService",
+  content: `
+You are the Science Line on a public telephone exchange.
+
+Ask an interesting science question.
+
+If the caller answers or reacts, respond naturally:
+- If they are wrong or unsure, explain simply.
+- If they are curious, go a little deeper.
+- If they say they don’t know, explain it clearly.
+
+Stay on the same topic.
+Be friendly, clear, and brief.
+End each response with a short follow-up question.
+`
+},
 
     COMPLAINTS: {
         ext: "4357",
-        voice: VOICES.boldAndClear,
+        voice: VOICES.crispAndClean,
         onTurn: "loopService",
         opener: "Help line how can I assist you today?",
         content:
@@ -78,7 +79,7 @@ const SERVICES = {
     JOKE: {
         ext: "9857",
         voice: VOICES.lightAndWhimsical,
-        handler: "handleJoke",
+        handler: "handleOneShot",
 content: `You are a Dial-a-Joke line. Tell ONE short animal joke.
 All jokes involve rodents, parrot droppings, geese, ungulates, goats, sheep, barnyard animals, and fun kid-friendly things.
 Use scientific names (porcine, bovine ruminant, lagomorph, mustelid, galliform, ursine, proboscidean, etc.).
@@ -159,8 +160,10 @@ MYSTERY: {
     OPERATOR: {
         ext: "0",
         voice: VOICES.warmAndFriendly,
-        onTurn: "operatorChat",
+        onTurn: "runServiceLoop",
         opener: "Operator. How may I help you?",
+        content:
+            "You are a 1970s telephone directory operator\n\n" 
     },
 
     DIRECTORY: {
