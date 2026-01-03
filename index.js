@@ -190,21 +190,24 @@ if (req.method === "POST" && req.url.startsWith("/call/reply")) {
   try {
     const { query } = url.parse(req.url, true);
 
-    const exten = (query.exten || "").trim();   // routing only
-    const id    = (query.id || "").trim();      // authoritative
-    if (!id) { res.end("exit"); return; }
+const raw = (query.exten || "0").trim();
 
-    call.id = id;   // ← THIS IS REQUIRED
+const [exten, callId] = raw.split("-", 2);
 
-    log("INCOMING CALL:", call.id);
+    log("INCOMING FROM:", exten);
+    log("INCOMING ID:", callId);
 
-    console.log("start call/reply", exten, id);
+call.id = callId;
+
+    log("INCOMING REPLY:", call.id);
+
+    console.log("start call/reply", exten, call.id);
 
     const baseDir = path.join(__dirname, "asterisk-sounds", "en");
 
-    const wavIn   = path.join(baseDir, `${id}_in.wav`);
-    const wavOut  = path.join(baseDir, `${id}.out.wav`);
-    const ulawOut = path.join(baseDir, `${id}.out.ulaw`);
+    const wavIn   = path.join(baseDir, `${call.id}_in.wav`);
+    const wavOut  = path.join(baseDir, `${call.id}.out.wav`);
+    const ulawOut = path.join(baseDir, `${call.id}.out.ulaw`);
 
     try { if (fs.existsSync(wavOut)) fs.unlinkSync(wavOut); } catch {}
 
@@ -229,9 +232,13 @@ if (req.method === "POST" && req.url.startsWith("/call/reply")) {
     if (req.method === "POST" && req.url.startsWith("/call/start")) {
         try {
             const { query } = url.parse(req.url, true);
-            const exten = (query.exten || "0").trim();
-const callId = (query.id || "").trim();
 
+
+const raw = (query.exten || "0").trim();
+
+const [exten, callId] = raw.split("-", 2);
+
+    log("INCOMING FROM:", exten);
     log("INCOMING CALL:", callId);
 
 
