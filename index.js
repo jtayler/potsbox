@@ -186,60 +186,65 @@ http.createServer(async (req, res) => {
         }
     }
 
-    if (req.method === "POST" && req.url.startsWith("/call/reply")) {
-        try {
-            const { query } = url.parse(req.url, true);
-            const exten = (query.exten || "").trim();
+if (req.method === "POST" && req.url.startsWith("/call/reply")) {
+  try {
+    const { query } = url.parse(req.url, true);
 
-            console.log("start call logic");
+    const exten = (query.exten || "").trim();   // routing only
+    const id    = (query.id || "").trim();      // authoritative
+    if (!id) { res.end("exit"); return; }
 
-            call.id = exten;
+    call.id = id;   // ← THIS IS REQUIRED
 
-            const baseDir = path.join(__dirname, "asterisk-sounds", "en");
-            const ulawPath = path.join(baseDir, `${exten}_in.ulaw`);
-            const wavPath = path.join(baseDir, `${exten}_in.wav`);
-            const outWav = path.join(baseDir, `${exten}.out.wav`);
-            const outUlaw = path.join(baseDir, `${exten}.out.ulaw`);
+    log("INCOMING CALL:", call.id);
 
-            try {
-                if (fs.existsSync(outWav)) fs.unlinkSync(outWav);
-                console.log(outWav);
-            } catch {}
+    console.log("start call/reply", exten, id);
 
+    const baseDir = path.join(__dirname, "asterisk-sounds", "en");
 
-if (isTooQuiet(wavPath)) {
-  await speak("Sorry, I didn’t catch that can you speak a bit louder please.");
-  res.end("loop");
-  return;
-}
+    const wavIn   = path.join(baseDir, `${id}_in.wav`);
+    const wavOut  = path.join(baseDir, `${id}.out.wav`);
+    const ulawOut = path.join(baseDir, `${id}.out.ulaw`);
 
-            const ctxPath = path.join(baseDir, `${call.id}.ctx.txt`);
+    try { if (fs.existsSync(wavOut)) fs.unlinkSync(wavOut); } catch {}
 
-            const heardRaw = await transcribeFromFile(wavPath);
-            console.log("RECORDED TEXT:", heardRaw); // Log the transcribed input
-
-            appendCtx("user", heardRaw);
-            const result = await runCall(heardRaw);
-            res.end(result === "exit" ? "exit" : "loop");
-
-            return;
-        } catch (err) {
-            console.error(err);
-            res.statusCode = 500;
-            res.end("ERROR\n");
-            return;
-        }
+    if (isTooQuiet(wavIn)) {
+      await speak("Sorry, I didn’t catch that. Can you speak a bit louder?");
+      res.end("loop");
+      return;
     }
+
+    const heardRaw = await transcribeFromFile(wavIn);
+    appendCtx("user", heardRaw);
+
+    const result = await runCall(heardRaw);
+    res.end(result === "exit" ? "exit" : "loop");
+  } catch (err) {
+    console.error(err);
+    res.statusCode = 500;
+    res.end("ERROR");
+  }
+}
 
     if (req.method === "POST" && req.url.startsWith("/call/start")) {
         try {
             const { query } = url.parse(req.url, true);
             const exten = (query.exten || "0").trim();
+const callId = (query.id || "").trim();
 
-            log("INCOMING CALL:", exten);
+    log("INCOMING CALL:", callId);
 
-            call.id = exten;
-            resetCallFiles(call.id);
+
+if (!callId) { res.end("exit"); return; }
+
+
+call.id = callId;
+call.greeted = false;
+call.service = serviceForExten(exten);
+call._assistantEnded = false;
+
+resetCallFiles(callId);
+
 
             // ONLY greet / opener — no transcription here
 
@@ -276,7 +281,6 @@ function resetCallFiles(callId) {
 }
 
 async function startCall({ exten }) {
-    call.id = exten;
     call.service = serviceForExten(exten);
     const svc = call.service;
 
