@@ -64,34 +64,12 @@ handlers.loopService = async ({ svc, user, context }) => {
     return "loop";
 };
 
-handlers.handleRiddle = async ({ svc, user }) => {
-    if (!user) {
-        const riddle = await runServiceLoop({ svc, user: "", context: "" });
-        if (riddle) await speak(riddle);
-        return "loop";
-    }
-
-    if (guessCount() < 3) {
-        await speak("Interesting. Want to guess again?");
-        return "loop";
-    }
-
-    const revealSvc = {
-        ...svc,
-        content: "Reveal the answer briefly. Thank the caller and say goodbye. Never use emojis.",
-    };
-
-    const answer = await runServiceLoop({ svc: revealSvc, user, context: "" });
-    if (answer) await speak(answer);
-    return "exit";
-};
-
 handlers.runServiceLoop = runServiceLoop; // ← RIGHT HERE
 
 handlers.handleLoopTurn = async (svc, heardRaw) => {
-    if (!svc.onTurn) return false;
+    if (!svc.handler) return false;
 
-    const result = await handlers[svc.onTurn]({ svc, user: heardRaw });
+    const result = await handlers[svc.handler]({ svc, user: heardRaw });
     if (result === "exit") return "exit";
 
     return true; // loop continues
@@ -194,14 +172,9 @@ const raw = (query.exten || "0").trim();
 
 const [exten, callId] = raw.split("-", 2);
 
-    log("INCOMING FROM:", exten);
-    log("INCOMING ID:", callId);
+    log("REPLY FROM:", raw);
 
 call.id = callId;
-
-    log("INCOMING REPLY:", call.id);
-
-    console.log("start call/reply", exten, call.id);
 
     const baseDir = path.join(__dirname, "asterisk-sounds", "en");
 
@@ -238,8 +211,7 @@ const raw = (query.exten || "0").trim();
 
 const [exten, callId] = raw.split("-", 2);
 
-    log("INCOMING FROM:", exten);
-    log("INCOMING CALL:", callId);
+    log("CALL FROM:", raw);
 
 
 if (!callId) { res.end("exit"); return; }
@@ -250,7 +222,7 @@ call.greeted = false;
 call.service = serviceForExten(exten);
 call._assistantEnded = false;
 
-resetCallFiles(callId);
+resetCallFiles(call.id);
 
 
             // ONLY greet / opener — no transcription here
@@ -260,7 +232,7 @@ resetCallFiles(callId);
                 res.end("loop");
                 return;
             }
-            res.end("once");
+            res.end("exit");
             return;
         } catch (err) {
             console.error(err);
@@ -277,14 +249,21 @@ resetCallFiles(callId);
 });
 
 function resetCallFiles(callId) {
-    const base = path.join(__dirname, "asterisk-sounds", "en");
+  const base = path.join(__dirname, "asterisk-sounds", "en");
 
-    for (const ext of ["ctx.txt", "ctx.jsonl", "out.wav", "out.ulaw", "_in.wav", "_in.ulaw"]) {
-        const p = path.join(base, `${callId}${ext.startsWith("_") ? ext : "." + ext}`);
-        try {
-            if (fs.existsSync(p)) fs.unlinkSync(p);
-        } catch {}
-    }
+  const files = [
+    `${callId}.ctx.txt`,
+    `${callId}.ctx.jsonl`,
+    `${callId}.out.wav`,
+    `${callId}.out.ulaw`,
+    `${callId}_in.wav`,
+    `${callId}_in.ulaw`,
+  ];
+
+  for (const f of files) {
+    const p = path.join(base, f);
+    try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch {}
+  }
 }
 
 async function startCall({ exten }) {
@@ -299,7 +278,7 @@ async function startCall({ exten }) {
 
     // No opener → first model turn
     if (isLoopService(svc)) {
-        await handlers[svc.onTurn]({ svc, user: "" });
+        await handlers[svc.handler]({ svc, user: "" });
     } else {
         const fn = handlers[svc.handler];
         if (fn) await fn({ svc });
@@ -328,19 +307,19 @@ function isTooQuiet(wavPath) {
     const out = execSync(cmd).toString();
 
     // DEBUG: dump analyzer output
-    console.log("VOLUME ANALYSIS:");
-    console.log(out);
+    //console.log("VOLUME ANALYSIS:");
+    //console.log(out);
 
     const match = out.match(/max_volume:\s*(-?\d+(\.\d+)?) dB/);
     if (!match) {
-      console.log("No max_volume found → treating as silence");
+      //console.log("No max_volume found → treating as silence");
       return true;
     }
 
     const maxDb = parseFloat(match[1]);
 
-    console.log(`Detected max volume: ${maxDb} dB`);
-    console.log(`Threshold: ${volume} dB`);
+    //console.log(`Detected max volume: ${maxDb} dB`);
+    //console.log(`Threshold: ${volume} dB`);
 
     return maxDb < volume;
   } catch (err) {
@@ -583,7 +562,7 @@ async function runServiceLoop({ svc }) {
 }
 
 function isLoopService(svc) {
-    return typeof svc.onTurn === "string";
+    return typeof svc.handler === "string" && svc.handler.includes("loop");
 }
 
 async function runCall(heardRaw) {
@@ -611,7 +590,7 @@ if (loopResult === true) {
 
             if (isLoopService(next)) {
                 await handlers.handleOpener(next);
-                await handlers[next.onTurn]({
+                await handlers[next.handler]({
                     svc: next,
                     user: "",
                     context: buildContext(),

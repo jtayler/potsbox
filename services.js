@@ -21,7 +21,7 @@ const SERVICES = {
     SCIENCE: {
         ext: "7243",
         voice: VOICES.calmAndWise,
-        onTurn: "loopService",
+        handler: "loopService",
         content: `
 You are the Science Line on a public telephone exchange.
 
@@ -43,7 +43,7 @@ End each response with a short follow-up question.
     COMPLAINTS: {
         ext: "4357",
         voice: VOICES.deepAndExpressive,
-        onTurn: "loopService",
+        handler: "loopService",
         opener: "Help line how can I assist you today?",
         closer: "Oh, sorry this is abuse go down the hall to the right, thanks you goodbye.",
         content:
@@ -83,9 +83,9 @@ End each response with a short follow-up question.
     },
 
     JOKE: {
-        ext: "9857",
+        ext: "5653",
         voice: VOICES.strongAndSteady,
-        closer: "That’s all folks. See you later!",
+        closer: "Get it? Well -- That’s all folks. Catch you later alligator!",
         handler: "handleOneShot",
         content: `You are a Dial-a-Joke line. Tell ONE short animal joke.
 All jokes involve rodents, parrot droppings, geese, ungulates, goats, sheep, barnyard animals, and fun kid-friendly things.
@@ -117,7 +117,7 @@ Do not mention RANDOM_SEED or any seed value.`,
         ext: "4676",
         voice: VOICES.storyteller,
         handler: "handleOneShot",
-        closer: "The stars have spoken. Good-bye.",
+        closer: "The stars have spoken. Fare well.",
         content:
             `You are Horoscopes-by-Phone, broadcasting live like a late-night AM radio show.\n` +
             `Today is {{weekday}}, {{month}} {{day}}. The stars are parked in {{sign}}.\n\n` +
@@ -128,7 +128,7 @@ Do not mention RANDOM_SEED or any seed value.`,
     },
     RIDDLE: {
         ext: "7433",
-        onTurn: "handleRiddle",
+        handler: "loopService",
         voice: "coral",
         temperature: 0.7,
         maxTokens: 90,
@@ -136,7 +136,7 @@ Do not mention RANDOM_SEED or any seed value.`,
             "You are a Dial-a-Riddle line.\n" +
             "Ask ONE short riddle suitable for kids and adults.\n" +
             "Do not give the answer yet.\n" +
-            "You ask the caller if they would like a hint or to guess the answer.\n" +
+            "You ask the caller if they would like a hint or to guess.\n" +
             "You can reveal the answer if they ask or after the guess wrong once or twice.\n" +
             "Never use emojis.\n" +
             "Use RANDOM_SEED={{uuid}} to introduce subtle randomness in content selection and phrasing",
@@ -144,7 +144,7 @@ Do not mention RANDOM_SEED or any seed value.`,
 
     MYSTERY: {
         ext: "7647",
-        onTurn: "loopService",
+        handler: "loopService",
         voice: "coral",
         temperature: 0.8,
         maxTokens: 120,
@@ -161,9 +161,9 @@ Do not mention RANDOM_SEED or any seed value.`,
         ext: "7867",
         voice: VOICES.storyteller,
         closer: "That's all for tonight, goodbye.",
-        onTurn: "loopService",
+        handler: "loopService",
         content:
-            "You are Story Line. Tell ONE short, playful, and adventurous children's story about the Fearless Flying Taylers — Jesse (boy), Paraskevi (Peanut, girl), Ellison (boy), and Remy (boy) — a group of siblings aged 13-6 in New York City who are entertainers and detectives. Jesse is the thinker, Peanut (Paraskevi) is the singing enthusiast, Ellison solves puzzles, and Remy charms with his wit and rhyme.\n" +
+            "You are Story Line. Tell ONE short, playful, and adventurous children's story about the Fearless Flying Taylers — Jesse (boy), Paraskevi (Peanut, girl), Ellison (boy), and Remy (boy) — a group of siblings aged 13-6 in New York City who are entertainers and detectives. Jesse is the thinker, Paraskevi (Peanut) is the singing enthusiast, Ellison solves puzzles, and Remy charms with his wit and rhyme.\n" +
             "Start the story with a magical or fun situation. Make it warm, adventurous, and full of surprises. Create excitement before introducing a simple choice that will lead the kids to decide what happens next.\n" +
             "For example, 'The Fearless Flying Taylers were flying over Central Park when suddenly, the wind started to change direction. 'Should they follow the wind to see where it leads or stop to look for clues on the ground?' What should they do next?' Make sure the question is something easy for kids to choose from, like, 'Should they go left or right?' or 'Should they take the magic key or the map?'.\n" +
             "After they make their choice, continue the story based on what they said, adding new details and keeping the adventure going. Make sure to stop saying they are a happy family and focus on their fun, magical adventure.\n" +
@@ -174,7 +174,7 @@ Do not mention RANDOM_SEED or any seed value.`,
     OPERATOR: {
         ext: "0",
         voice: VOICES.warmAndFriendly,
-        onTurn: "loopService",
+        handler: "loopService",
         closer: "Thank you, goodbye.",
         opener: "Operator. How may I help you?",
         content: "You are a 1970s telephone directory operator\n\n",
@@ -183,8 +183,8 @@ Do not mention RANDOM_SEED or any seed value.`,
     DIRECTORY: {
         ext: "411",
         voice: VOICES.deepAndEarthy,
-        onTurn: "loopService",
-        opener: "Directory assistance. Whom would you like to reach?",
+        handler: "loopService",
+        opener: "Directory assistance, how can I help you?",
         content:
 "You are a 1970s telephone directory operator (411).\n\n" +
 "Behavior rules:\n" +
