@@ -31,7 +31,6 @@ const handlers = {
         const { time, seconds } = getTimeParts();
         await speak(`At the tone, the time will be ${time} and ${secondsToWords(seconds)}.`);
         await speak("BEEEP!");
-        await speak("Goodbye.");
         if (svc.closer) await speak(svc.closer);
     },
 
@@ -164,67 +163,68 @@ http.createServer(async (req, res) => {
         }
     }
 
-if (req.method === "POST" && req.url.startsWith("/call/reply")) {
-  try {
-    const { query } = url.parse(req.url, true);
+    if (req.method === "POST" && req.url.startsWith("/call/reply")) {
+        try {
+            const { query } = url.parse(req.url, true);
 
-const raw = (query.exten || "0").trim();
+            const raw = (query.exten || "0").trim();
 
-const [exten, callId] = raw.split("-", 2);
+            const [exten, callId] = raw.split("-", 2);
 
-    log("REPLY FROM:", raw);
+            log("REPLY FROM:", raw);
 
-call.id = callId;
+            call.id = callId;
 
-    const baseDir = path.join(__dirname, "asterisk-sounds", "en");
+            const baseDir = path.join(__dirname, "asterisk-sounds", "en");
 
-    const wavIn   = path.join(baseDir, `${call.id}_in.wav`);
-    const wavOut  = path.join(baseDir, `${call.id}.out.wav`);
-    const ulawOut = path.join(baseDir, `${call.id}.out.ulaw`);
+            const wavIn = path.join(baseDir, `${call.id}_in.wav`);
+            const wavOut = path.join(baseDir, `${call.id}.out.wav`);
+            const ulawOut = path.join(baseDir, `${call.id}.out.ulaw`);
 
-    try { if (fs.existsSync(wavOut)) fs.unlinkSync(wavOut); } catch {}
+            try {
+                if (fs.existsSync(wavOut)) fs.unlinkSync(wavOut);
+            } catch {}
 
-    if (isTooQuiet(wavIn)) {
-      await speak("Sorry, I didn’t catch that. Can you speak a bit louder?");
-      res.end("loop");
-      return;
+            if (isTooQuiet(wavIn)) {
+                await speak("Sorry, I didn’t catch that. Can you speak a bit louder?");
+                res.end("loop");
+                return;
+            }
+
+            const heardRaw = await transcribeFromFile(wavIn);
+            appendCtx("user", heardRaw);
+            console.log("HEARD:", heardRaw);
+
+            const result = await runCall(heardRaw);
+            res.end(result === "exit" ? "exit" : "loop");
+        } catch (err) {
+            console.error(err);
+            res.statusCode = 500;
+            res.end("ERROR");
+        }
     }
-
-    const heardRaw = await transcribeFromFile(wavIn);
-    appendCtx("user", heardRaw);
-    console.log("HEARD:", heardRaw);
-
-    const result = await runCall(heardRaw);
-    res.end(result === "exit" ? "exit" : "loop");
-  } catch (err) {
-    console.error(err);
-    res.statusCode = 500;
-    res.end("ERROR");
-  }
-}
 
     if (req.method === "POST" && req.url.startsWith("/call/start")) {
         try {
             const { query } = url.parse(req.url, true);
 
+            const raw = (query.exten || "0").trim();
 
-const raw = (query.exten || "0").trim();
+            const [exten, callId] = raw.split("-", 2);
 
-const [exten, callId] = raw.split("-", 2);
+            log("CALL FROM:", raw);
 
-    log("CALL FROM:", raw);
+            if (!callId) {
+                res.end("exit");
+                return;
+            }
 
+            call.id = callId;
+            call.greeted = false;
+            call.service = serviceForExten(exten);
+            call._assistantEnded = false;
 
-if (!callId) { res.end("exit"); return; }
-
-
-call.id = callId;
-call.greeted = false;
-call.service = serviceForExten(exten);
-call._assistantEnded = false;
-
-resetCallFiles(call.id);
-
+            resetCallFiles(call.id);
 
             // ONLY greet / opener — no transcription here
 
@@ -250,21 +250,23 @@ resetCallFiles(call.id);
 });
 
 function resetCallFiles(callId) {
-  const base = path.join(__dirname, "asterisk-sounds", "en");
+    const base = path.join(__dirname, "asterisk-sounds", "en");
 
-  const files = [
-    `${callId}.ctx.txt`,
-    `${callId}.ctx.jsonl`,
-    `${callId}.out.wav`,
-    `${callId}.out.ulaw`,
-    `${callId}_in.wav`,
-    `${callId}_in.ulaw`,
-  ];
+    const files = [
+        `${callId}.ctx.txt`,
+        `${callId}.ctx.jsonl`,
+        `${callId}.out.wav`,
+        `${callId}.out.ulaw`,
+        `${callId}_in.wav`,
+        `${callId}_in.ulaw`,
+    ];
 
-  for (const f of files) {
-    const p = path.join(base, f);
-    try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch {}
-  }
+    for (const f of files) {
+        const p = path.join(base, f);
+        try {
+            if (fs.existsSync(p)) fs.unlinkSync(p);
+        } catch {}
+    }
 }
 
 async function startCall({ exten }) {
@@ -300,33 +302,32 @@ function buildMessages(svc) {
     return messages;
 }
 
-
 function isTooQuiet(wavPath) {
-  const volume = -30; // try -30, -28, -25
-  try {
-    const cmd = `ffmpeg -hide_banner -nostats -i "${wavPath}" -af volumedetect -f null /dev/null 2>&1`;
-    const out = execSync(cmd).toString();
+    const volume = -30; // try -30, -28, -25
+    try {
+        const cmd = `ffmpeg -hide_banner -nostats -i "${wavPath}" -af volumedetect -f null /dev/null 2>&1`;
+        const out = execSync(cmd).toString();
 
-    // DEBUG: dump analyzer output
-    //console.log("VOLUME ANALYSIS:");
-    //console.log(out);
+        // DEBUG: dump analyzer output
+        //console.log("VOLUME ANALYSIS:");
+        //console.log(out);
 
-    const match = out.match(/max_volume:\s*(-?\d+(\.\d+)?) dB/);
-    if (!match) {
-      //console.log("No max_volume found → treating as silence");
-      return true;
+        const match = out.match(/max_volume:\s*(-?\d+(\.\d+)?) dB/);
+        if (!match) {
+            //console.log("No max_volume found → treating as silence");
+            return true;
+        }
+
+        const maxDb = parseFloat(match[1]);
+
+        //console.log(`Detected max volume: ${maxDb} dB`);
+        //console.log(`Threshold: ${volume} dB`);
+
+        return maxDb < volume;
+    } catch (err) {
+        console.error("Volume detect failed:", err.message);
+        return true;
     }
-
-    const maxDb = parseFloat(match[1]);
-
-    //console.log(`Detected max volume: ${maxDb} dB`);
-    //console.log(`Threshold: ${volume} dB`);
-
-    return maxDb < volume;
-  } catch (err) {
-    console.error("Volume detect failed:", err.message);
-    return true;
-  }
 }
 
 function cleanForSpeech(text) {
@@ -334,7 +335,7 @@ function cleanForSpeech(text) {
 }
 
 function assistantEndedCall(text) {
-  return /\b(goodbye|good-bye|that’s all|thats all|farewell|hang up)\b/i.test(text);
+    return /\b(goodbye|good-bye|that’s all|thats all|farewell|hang up)\b/i.test(text);
 }
 
 async function speak(text) {
@@ -395,11 +396,10 @@ async function speak(text) {
             );
         });
 
-if (assistantEndedCall(s)) {
-  console.log("Assistant ended call.");
-  call._assistantEnded = true;
-}
-
+        if (assistantEndedCall(s)) {
+            console.log("Assistant ended call.");
+            call._assistantEnded = true;
+        }
     } catch (err) {
         console.error("Error in speak:", err);
     }
@@ -415,44 +415,42 @@ function originateCall({ exten }) {
 }
 
 async function transferCall(exten) {
-  return ami.send({
-    Action: "Originate",
-    Channel: `Local/${exten}@ai-phone`,
-    CallerID: `${exten}`,
-    Async: true,
-  });
+    return ami.send({
+        Action: "Originate",
+        Channel: `Local/${exten}@ai-phone`,
+        CallerID: `${exten}`,
+        Async: true,
+    });
 }
 
 function serviceFromIntent(action) {
-  if (!action?.startsWith("SERVICE_")) return null;
-  const key = action.replace("SERVICE_", "");
-  return SERVICES[key] || null;
+    if (!action?.startsWith("SERVICE_")) return null;
+    const key = action.replace("SERVICE_", "");
+    return SERVICES[key] || null;
 }
 
 async function operatorChat(heardRaw) {
-  console.log("Handling Operator Chat for:", heardRaw);
+    console.log("Handling Operator Chat for:", heardRaw);
 
-  try {
-    const svc = call.service;
+    try {
+        const svc = call.service;
 
-    const messages = buildMessages(svc);
-    messages.push({ role: "user", content: heardRaw });
+        const messages = buildMessages(svc);
+        messages.push({ role: "user", content: heardRaw });
 
-    const r = await openai.responses.create({
-      model: "gpt-4o-mini",
-      temperature: 0.7,
-      max_output_tokens: 120,
-      input: messages,
-    });
+        const r = await openai.responses.create({
+            model: "gpt-4o-mini",
+            temperature: 0.7,
+            max_output_tokens: 120,
+            input: messages,
+        });
 
-    const reply = (r.output_text || "")
-      .replace(/^operator:\s*/i, "")
-      .trim();
+        const reply = (r.output_text || "").replace(/^operator:\s*/i, "").trim();
 
-    await speak(reply);
-  } catch (err) {
-    console.error("Error in operator chat:", err);
-  }
+        await speak(reply);
+    } catch (err) {
+        console.error("Error in operator chat:", err);
+    }
 }
 
 function getTimeParts() {
@@ -574,12 +572,15 @@ async function runCall(heardRaw) {
     }
 
     // loop services (riddle, mystery, etc)
-const loopResult = await handlers.handleLoopTurn(svc, heardRaw);
-if (loopResult === "exit") return "exit";
-if (loopResult === true) {
-  if (call._assistantEnded) { call._assistantEnded = false; return "exit"; }
-  return "loop";
-}
+    const loopResult = await handlers.handleLoopTurn(svc, heardRaw);
+    if (loopResult === "exit") return "exit";
+    if (loopResult === true) {
+        if (call._assistantEnded) {
+            call._assistantEnded = false;
+            return "exit";
+        }
+        return "loop";
+    }
 
     const intent = await routeIntentMasked(heardRaw);
     if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
@@ -606,10 +607,10 @@ if (loopResult === true) {
 
     await operatorChat(heardRaw);
 
-if (call._assistantEnded) {
-  call._assistantEnded = false;
-  return "exit";
-}
+    if (call._assistantEnded) {
+        call._assistantEnded = false;
+        return "exit";
+    }
 
     return "loop";
 }
