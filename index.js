@@ -87,7 +87,7 @@ const openai = new OpenAI({
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 function serviceForExten(exten) {
-    return Object.values(SERVICES).find((svc) => svc.ext === exten) || SERVICES.OPERATOR;
+  return Object.values(SERVICES).find((svc) => svc.ext === exten) || null;
 }
 
 const CALLER_TZ = process.env.CALLER_TZ || "America/New_York";
@@ -204,44 +204,38 @@ http.createServer(async (req, res) => {
         }
     }
 
-    if (req.method === "POST" && req.url.startsWith("/call/start")) {
-        try {
-            const { query } = url.parse(req.url, true);
+if (req.method === "POST" && req.url.startsWith("/call/start")) {
+  try {
+    const { query } = url.parse(req.url, true);
+    const raw = (query.exten || "0").trim();
+    const [exten, callId] = raw.split("-", 2);
 
-            const raw = (query.exten || "0").trim();
+    if (!callId) { res.end("exit"); return; }
 
-            const [exten, callId] = raw.split("-", 2);
+    call.id = callId;
+    call.greeted = false;
+    call._assistantEnded = false;
 
-            log("CALL FROM:", raw);
+    log("CALL FROM:", raw);
 
-            if (!callId) {
-                res.end("exit");
-                return;
-            }
+    // Only operator on 0
+    const svc = (exten === "0") ? SERVICES.OPERATOR : serviceForExten(exten);
+    if (!svc) { res.end("invalid"); return; }
 
-            call.id = callId;
-            call.greeted = false;
-            call.service = serviceForExten(exten);
-            call._assistantEnded = false;
+    call.service = svc;
 
-            resetCallFiles(call.id);
+    resetCallFiles(call.id);
 
-            // ONLY greet / opener — no transcription here
-
-            await startCall({ exten });
-            if (isLoopService(call.service)) {
-                res.end("loop");
-                return;
-            }
-            res.end("exit");
-            return;
-        } catch (err) {
-            console.error(err);
-            res.statusCode = 500;
-            res.end("ERROR\n");
-            return;
-        }
-    }
+    await startCall({ exten });          // uses call.service already
+    res.end(isLoopService(call.service) ? "loop" : "exit");
+    return;
+  } catch (err) {
+    console.error(err);
+    res.statusCode = 500;
+    res.end("ERROR\n");
+    return;
+  }
+}
 
     res.statusCode = 404;
     res.end();
