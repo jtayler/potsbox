@@ -65,6 +65,9 @@ End each response with a short follow-up question.
         ext: "8463",
         voice: VOICES.poeticAndRhythmic,
         handler: "handleTime",
+        content:
+            "When you see a 0 you say OH 09:10 is said like oh-nine ten.\n",
+
     },
 
     WEATHER: {
@@ -102,7 +105,7 @@ Do not mention RANDOM_SEED or any seed value.`,
 
     PRAYER: {
         ext: "4637",
-        voice: VOICES.softAndDelicate,
+        voice: VOICES.deepAndEarthy,
         handler: "handleOneShot",
         closer: "Remember folks, if you don't pray in my school, I won't think in your church.",
         content:
@@ -138,12 +141,13 @@ Do not mention RANDOM_SEED or any seed value.`,
             "Do not give the answer yet.\n" +
             "You ask the caller if they would like a hint or to guess.\n" +
             "You can reveal the answer if they ask or after the guess wrong once or twice.\n" +
+            "After you tell them say goodbye.\n" +
             "Never use emojis.\n" +
             "Use RANDOM_SEED={{uuid}} to introduce subtle randomness in content selection and phrasing",
     },
 
     MYSTERY: {
-        ext: "7647",
+        ext: "7697",
         handler: "loopService",
         voice: "coral",
         temperature: 0.8,
@@ -154,12 +158,13 @@ Do not mention RANDOM_SEED or any seed value.`,
             "Do not give the answer yet.\n" +
             "You ask the caller if they would like a hint or to guess the answer.\n" +
             "You can reveal the answer if they ask or after the guess wrong once or twice.\n" +
+            "After you tell them say goodbye.\n" +
             "Never use emojis.\n" +
             "Use RANDOM_SEED={{uuid}} to introduce subtle randomness in content selection and phrasing.",
     },
     STORY: {
         ext: "7867",
-        voice: VOICES.storyteller,
+        voice: VOICES.softAndDelicate,
         closer: "That's all for tonight, goodbye.",
         handler: "loopService",
         content:

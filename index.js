@@ -64,7 +64,7 @@ handlers.loopService = async ({ svc, user, context }) => {
     return "loop";
 };
 
-handlers.runServiceLoop = runServiceLoop; // ← RIGHT HERE
+handlers.runServiceLoop = runServiceLoop;
 
 handlers.handleLoopTurn = async (svc, heardRaw) => {
     if (!svc.handler) return false;
@@ -72,7 +72,7 @@ handlers.handleLoopTurn = async (svc, heardRaw) => {
     const result = await handlers[svc.handler]({ svc, user: heardRaw });
     if (result === "exit") return "exit";
 
-    return true; // loop continues
+    return true;
 };
 
 const url = require("url");
@@ -192,6 +192,7 @@ call.id = callId;
 
     const heardRaw = await transcribeFromFile(wavIn);
     appendCtx("user", heardRaw);
+    console.log("HEARD:", heardRaw);
 
     const result = await runCall(heardRaw);
     res.end(result === "exit" ? "exit" : "loop");
@@ -339,7 +340,7 @@ function assistantEndedCall(text) {
 async function speak(text) {
     if (text === "loop" || text === "exit") return;
 
-    console.log("SPOKEN TEXT:", text); // Add a log to check what text we're trying to speak
+    console.log("SPOKEN:", text); // Add a log to check what text we're trying to speak
     const s = cleanForSpeech(text);
 
     if (!s) {
@@ -429,31 +430,29 @@ function serviceFromIntent(action) {
 }
 
 async function operatorChat(heardRaw) {
-    console.log("Handling Operator Chat for:", heardRaw); // Log the input
+  console.log("Handling Operator Chat for:", heardRaw);
 
-    try {
-        const r = await openai.responses.create({
-            model: "gpt-4o-mini",
-            temperature: 0.7,
-            max_output_tokens: 120,
-            input: [
-                {
-                    role: "system",
-                    content: "You are a 1970s telephone operator. Calm, efficient, polite.",
-                },
-                {
-                    role: "user",
-                    content: `Conversation so far:\n${buildContext()}\n\nCaller: ${heardRaw}\nRespond naturally`,
-                },
-            ],
-        });
+  try {
+    const svc = call.service;
 
-        const reply = (r.output_text || "").replace(/^operator:\s*/i, "").trim();
+    const messages = buildMessages(svc);
+    messages.push({ role: "user", content: heardRaw });
 
-        await speak(reply);
-    } catch (err) {
-        console.error("Error in operator chat:", err);
-    }
+    const r = await openai.responses.create({
+      model: "gpt-4o-mini",
+      temperature: 0.7,
+      max_output_tokens: 120,
+      input: messages,
+    });
+
+    const reply = (r.output_text || "")
+      .replace(/^operator:\s*/i, "")
+      .trim();
+
+    await speak(reply);
+  } catch (err) {
+    console.error("Error in operator chat:", err);
+  }
 }
 
 function getTimeParts() {
