@@ -25,6 +25,7 @@ const OpenAI = require("openai");
 const { exec, execSync } = require("child_process");
 const crypto = require("crypto");
 const HANGUP_RE = /\b(bye|goodbye|hang up|get off|gotta go|have to go|see you)\b/i;
+const url = require("url");
 
 const handlers = {
     handleTime: async ({ svc }) => {
@@ -35,46 +36,38 @@ const handlers = {
     },
 
     handleWeather: async ({ svc }) => {
-        const report = await getWeatherReport(DEFAULT_WEATHER_CITY);
-        if (!report) return speak("Weather service is temporarily unavailable.");
+        const report = await getWeatherReport();
+        if (!report) return speak("I am sorry but the Weather service is temporarily unavailable.");
         await speak(await narrateWeather(openai, report));
-        await speak("Remember folks, if you don't like the weather, wait five minutes.");
+        await speak("If you don't like the weather, wait five minutes.");
         if (svc.closer) await speak(svc.closer);
     },
 
     handleOpener: async (svc) => {
-        if (svc.opener) {
-            await speak(svc.opener);
-        }
+        if (svc.opener) await speak(svc.opener);
+    },
+
+    handleOneShot: async ({ svc }) => {
+        const reply = await handlers.runServiceLoop({ svc });
+        if (reply) await speak(reply);
+        if (svc.closer) await speak(svc.closer);
+        return "exit";
+    },
+
+    loopService: async ({ svc, user, context }) => {
+        const reply = await handlers.runServiceLoop({ svc, user: user ?? "", context });
+        if (reply) await speak(reply);
+        return "loop";
+    },
+
+    runServiceLoop,
+
+    handleLoopTurn: async (svc, heardRaw) => {
+        if (!svc.handler) return false;
+        const result = await handlers[svc.handler]({ svc, user: heardRaw });
+        return result === "exit" ? "exit" : true;
     },
 };
-
-handlers.handleOneShot = async ({ svc }) => {
-    const reply = await runServiceLoop({ svc });
-    if (reply) await speak(reply);
-    if (svc.closer) await speak(svc.closer);
-
-    return "exit";
-};
-
-handlers.loopService = async ({ svc, user, context }) => {
-    const reply = await runServiceLoop({ svc, user: user ?? "", context });
-    if (reply) await speak(reply);
-    return "loop";
-};
-
-handlers.runServiceLoop = runServiceLoop;
-
-handlers.handleLoopTurn = async (svc, heardRaw) => {
-    if (!svc.handler) return false;
-
-    const result = await handlers[svc.handler]({ svc, user: heardRaw });
-    if (result === "exit") return "exit";
-
-    return true;
-};
-
-const url = require("url");
 
 if (!process.env.OPENAI_API_KEY) {
     console.error("Missing OPENAI_API_KEY in environment.");
@@ -87,22 +80,18 @@ const openai = new OpenAI({
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 function serviceForExten(exten) {
-  return Object.values(SERVICES).find((svc) => svc.ext === exten) || null;
+    return Object.values(SERVICES).find((svc) => svc.ext === exten) || null;
 }
 
 const CALLER_TZ = process.env.CALLER_TZ || "America/New_York";
 
-const DEFAULT_WEATHER_CITY = "New York City";
-async function getWeatherReport(city) {
-    // 1) geocode city -> lat/lon
-    const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`;
+async function getWeatherReport() {
+    const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(call.city)}&count=1&language=en&format=json`;
     const geo = await fetch(geoUrl).then((r) => r.json());
     const hit = geo?.results?.[0];
     if (!hit) return null;
 
     const { latitude, longitude, name, admin1, country } = hit;
-
-    // 2) current weather
     const wxUrl =
         `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
         `&current=temperature_2m,wind_speed_10m,precipitation,weather_code` +
@@ -123,12 +112,16 @@ const call = {
     service: null,
 };
 
+let channelVars = {};
+
 function appendCtx(role, content) {
+    // records each turn
     const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.jsonl`);
     fs.appendFileSync(ctxPath, JSON.stringify({ role, content }) + "\n");
 }
 
 function buildContext() {
+    // assembles past turns into a prompt file for the model
     const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.txt`);
 
     if (!fs.existsSync(ctxPath)) return "No prior conversation.";
@@ -137,61 +130,66 @@ function buildContext() {
     return text || "No prior conversation.";
 }
 
+async function initCallState({ req, channelVars = {} }) {
+    const { raw, exten, callId } = parseCallQuery(req);
+
+    call.id = callId;
+    call.greeted = false;
+    call._assistantEnded = false;
+
+    call.city = channelVars.CALLER_CITY || "New York City";
+    call.timezone = channelVars.CALLER_TZ || "America/New_York";
+
+    return { raw, exten, callId };
+}
+
+function parseCallQuery(req) {
+    const { query } = url.parse(req.url, true);
+    const raw = (query.exten || "").trim();
+    const [exten, callId] = raw.split("-", 2);
+    return { query, raw, exten, callId };
+}
+
 http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url.startsWith("/call/dial")) {
         try {
-            const { query } = url.parse(req.url, true);
-            const exten = (query.exten || "").trim();
+            const { exten } = await initCallState({ req, channelVars: {} });
+
             if (!exten) {
                 res.statusCode = 400;
                 res.end("Missing exten\n");
                 return;
             }
 
-            await originateCall({
-                exten,
-                channel: "PJSIP/1001",
-            });
+            await originateCall({ exten });
 
             res.end("DIALING\n");
-            return;
         } catch (err) {
             console.error(err);
             res.statusCode = 500;
             res.end("ERROR\n");
-            return;
         }
     }
 
     if (req.method === "POST" && req.url.startsWith("/call/reply")) {
         try {
-            const { query } = url.parse(req.url, true);
+            const { raw, exten, callId } = await initCallState({ req, channelVars: channelVars || {} });
 
-            const raw = (query.exten || "0").trim();
+            log("CALL REPLY FROM:", raw, { exten, callId });
 
-            const [exten, callId] = raw.split("-", 2);
-
-            log("REPLY FROM:", raw);
-
-            call.id = callId;
-
-            const baseDir = path.join(__dirname, "asterisk-sounds", "en");
-
-            const wavIn = path.join(baseDir, `${call.id}_in.wav`);
-            const wavOut = path.join(baseDir, `${call.id}.out.wav`);
-            const ulawOut = path.join(baseDir, `${call.id}.out.ulaw`);
+            const { wavPath, wavInPath } = callFiles(call.id);
 
             try {
-                if (fs.existsSync(wavOut)) fs.unlinkSync(wavOut);
+                if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
             } catch {}
 
-            if (isTooQuiet(wavIn)) {
+            if (isTooQuiet(wavInPath)) {
                 await speak("Sorry, I didn’t catch that. Can you speak a bit louder?");
                 res.end("loop");
                 return;
             }
 
-            const heardRaw = await transcribeFromFile(wavIn);
+            const heardRaw = await transcribeFromFile(wavInPath);
             appendCtx("user", heardRaw);
             console.log("HEARD:", heardRaw);
 
@@ -204,38 +202,36 @@ http.createServer(async (req, res) => {
         }
     }
 
-if (req.method === "POST" && req.url.startsWith("/call/start")) {
-  try {
-    const { query } = url.parse(req.url, true);
-    const raw = (query.exten || "0").trim();
-    const [exten, callId] = raw.split("-", 2);
+    if (req.method === "POST" && req.url.startsWith("/call/start")) {
+        try {
+            const { raw, exten, callId } = await initCallState({ req, channelVars: channelVars || {} });
 
-    if (!callId) { res.end("exit"); return; }
+            if (!callId) {
+                res.end("exit");
+                return;
+            }
 
-    call.id = callId;
-    call.greeted = false;
-    call._assistantEnded = false;
+            log("CALL START FROM:", raw);
 
-    log("CALL FROM:", raw);
+            const svc = exten === "0" ? SERVICES.OPERATOR : serviceForExten(exten);
 
-    // Only operator on 0
-    const svc = (exten === "0") ? SERVICES.OPERATOR : serviceForExten(exten);
-    if (!svc) { res.end("invalid"); return; }
+            if (!svc) {
+                res.end("invalid");
+                return;
+            }
 
-    call.service = svc;
+            call.service = svc;
 
-    resetCallFiles(call.id);
+            resetCallFiles(call.id);
 
-    await startCall({ exten });          // uses call.service already
-    res.end(isLoopService(call.service) ? "loop" : "exit");
-    return;
-  } catch (err) {
-    console.error(err);
-    res.statusCode = 500;
-    res.end("ERROR\n");
-    return;
-  }
-}
+            await startCall({ exten });
+            res.end(isLoopService(call.service) ? "loop" : "exit");
+        } catch (err) {
+            console.error(err);
+            res.statusCode = 500;
+            res.end("ERROR\n");
+        }
+    }
 
     res.statusCode = 404;
     res.end();
@@ -269,7 +265,7 @@ async function startCall({ exten }) {
 
     // Opener is terminal for this turn
     if (svc.opener) {
-        await speak(svc.opener);
+        await speak(replaceTokens(svc.opener, svc));
         return;
     }
 
@@ -302,21 +298,13 @@ function isTooQuiet(wavPath) {
         const cmd = `ffmpeg -hide_banner -nostats -i "${wavPath}" -af volumedetect -f null /dev/null 2>&1`;
         const out = execSync(cmd).toString();
 
-        // DEBUG: dump analyzer output
-        //console.log("VOLUME ANALYSIS:");
-        //console.log(out);
-
         const match = out.match(/max_volume:\s*(-?\d+(\.\d+)?) dB/);
         if (!match) {
-            //console.log("No max_volume found → treating as silence");
+            console.log("No max_volume found → treating as silence");
             return true;
         }
 
         const maxDb = parseFloat(match[1]);
-
-        //console.log(`Detected max volume: ${maxDb} dB`);
-        //console.log(`Threshold: ${volume} dB`);
-
         return maxDb < volume;
     } catch (err) {
         console.error("Volume detect failed:", err.message);
@@ -332,10 +320,21 @@ function assistantEndedCall(text) {
     return /\b(goodbye|good-bye|that’s all|thats all|farewell|hang up)\b/i.test(text);
 }
 
+function callFiles(callId) {
+    const baseDir = path.join(__dirname, "asterisk-sounds", "en");
+    return {
+        baseDir,
+        ctx: path.join(baseDir, `${callId}.ctx.txt`),
+        wavPath: path.join(baseDir, `${callId}.out.wav`),
+        ulawPath: path.join(baseDir, `${callId}.out.ulaw`),
+        wavInPath: path.join(baseDir, `${callId}_in.wav`),
+    };
+}
+
 async function speak(text) {
     if (text === "loop" || text === "exit") return;
 
-    console.log("SPOKEN:", text); // Add a log to check what text we're trying to speak
+    console.log("SPOKEN:", text);
     const s = cleanForSpeech(text);
 
     if (!s) {
@@ -343,17 +342,11 @@ async function speak(text) {
         return;
     }
 
-    const baseDir = path.join(__dirname, "asterisk-sounds", "en");
-    const ctxPath = path.join(baseDir, `${call.id}.ctx.txt`);
-    const wavPath = path.join(baseDir, `${call.id}.out.wav`);
-    const ulawPath = path.join(baseDir, `${call.id}.out.ulaw`);
+    const { wavPath, ulawPath } = callFiles(call.id);
 
-    // Append text
     appendCtx("assistant", s);
 
     try {
-        // TTS → WAV chunk
-
         const svc = call.service;
         if (!svc?.voice) throw new Error("No voice for current service");
 
@@ -374,16 +367,13 @@ async function speak(text) {
             return;
         }
 
-        // Append WAV chunk to the file
         if (!fs.existsSync(wavPath)) {
-            // First chunk: full WAV
             fs.writeFileSync(wavPath, wavChunk);
         } else {
             const pcm = wavChunk.subarray(44);
             fs.appendFileSync(wavPath, pcm);
         }
 
-        // Convert to final ulaw
         await new Promise((resolve, reject) => {
             exec(`ffmpeg -y -i "${wavPath}" -ar 8000 -ac 1 -f mulaw "${ulawPath}"`, (err) =>
                 err ? reject(err) : resolve()
@@ -391,7 +381,7 @@ async function speak(text) {
         });
 
         if (assistantEndedCall(s)) {
-            console.log("Assistant ended call.");
+            console.log("Assistant Ended Call.");
             call._assistantEnded = true;
         }
     } catch (err) {
@@ -508,6 +498,33 @@ function replaceTokens(content, svc = {}) {
         "{{month}}": now.toLocaleDateString("en-US", { month: "long" }),
         "{{day}}": now.getDate(),
         "{{sign}}": zodiacSignForDate(now),
+        "{{hour}}": now.getHours(),
+        "{{hour12}}": ((now.getHours() + 11) % 12) + 1,
+        "{{hour24}}": now.getHours(), // 0–23
+        "{{minute}}": String(now.getMinutes()).padStart(2, "0"),
+        "{{ampm}}": now.getHours() >= 12 ? "PM" : "AM",
+        "{{greeting}}": now.getHours() < 12 ? "Good morning" : now.getHours() < 17 ? "Good afternoon" : "Good evening",
+
+        "{{exten}}": svc.ext,
+        "{{service}}": svc.name || svc.key,
+        "{{callid}}": call.id,
+
+        "{{time}}": now.toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+        }),
+
+        "{{timeofday}}":
+            now.getHours() < 12
+                ? "morning"
+                : now.getHours() < 17
+                  ? "afternoon"
+                  : now.getHours() < 21
+                    ? "evening"
+                    : "night",
+
+        "{{timezone}}": CALLER_TZ,
     };
 
     let out = content;
@@ -565,7 +582,6 @@ async function runCall(heardRaw) {
         return "exit";
     }
 
-    // loop services (riddle, mystery, etc)
     const loopResult = await handlers.handleLoopTurn(svc, heardRaw);
     if (loopResult === "exit") return "exit";
     if (loopResult === true) {
