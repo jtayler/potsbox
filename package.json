@@ -12,10 +12,10 @@
   "license": "ISC",
   "dependencies": {
     "asterisk-ami-client": "^1.1.5",
+    "debug": "^4.4.3",
     "mic": "^2.1.2",
     "node-fetch": "^3.3.2",
     "openai": "^6.15.0",
-    "speaker": "^0.5.5",
     "wav": "^1.0.2",
     "ws": "^8.18.3"
   }

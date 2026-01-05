@@ -19,20 +19,34 @@ const VOICES = {
 // Services structure (single source of truth)
 const SERVICES = {
 
-    THISDAY: {
-        ext: "22",
-        voice: VOICES.storyteller,
+    NEWS: {
+        ext: "63", //This
+        voice: VOICES.softAndDelicate,
         handler: "handleOnThisDay",
-        closer: "Thank you, goodbye.",
-        content: "You are a reporter on todays events\n",
+        closer: "Those who cannot remember the past are condemned to repeat it.",
+        content: "It's now {{weekday}} {{timeofday}} which you can mention if it makes sense to. You are a reporter on todays events in history. You are to sound like the teacher in ferris's day off.\n" +
+            "Never use emojis.\n" +
+            "Use RANDOM_SEED={{uuid}} to introduce subtle randomness in content selection and phrasing",
+    },
+
+    EARTHQUAKE: {
+        ext: "32",
+        voice: VOICES.warmAndFriendly,
+        handler: "handleQuake",
+        closer: "Oh the humanity! Shelter In Place!",
+        content: "It's now {{weekday}} {{timeofday}} which you can mention if it makes sense to. You are an Earthquake reporter on todays events but you basically do the Hindenburg with oh the humanity and so forth.\n" +
+            "Never use emojis.\n" +
+            "Use RANDOM_SEED={{uuid}} to introduce subtle randomness in content selection and phrasing",
     },
 
     NASA: {
-        ext: "23",
-        voice: VOICES.storyteller,
-        handler: "handleQuake",
-        closer: "Thank you, goodbye.",
-        content: "You are a reporter on todays events\n",
+        ext: "62",
+        voice: VOICES.lightAndWhimsical,
+        handler: "handleNasa",
+        closer: "Brought to you by NASA, For the benefit of all.",
+        content: "It's now {{weekday}} {{timeofday}} which you can mention if it makes sense to. You are a NASA reporter, Jason Tilhide and introduce yourself on todays events but you are a childish comic using animal references.\n" +
+            "Never use emojis.\n" +
+            "Use RANDOM_SEED={{uuid}} to introduce subtle randomness in content selection and phrasing",
     },
 
     SCIENCE: {
@@ -53,7 +67,7 @@ End each response with a short follow-up question so the caller knows to respond
     },
 
     COMPLAINTS: {
-        ext: "4357",
+        ext: "43",
         voice: VOICES.deepAndExpressive,
         handler: "loopService",
         opener: "{{greeting}} Help line — how may I serve you today?",
@@ -74,17 +88,17 @@ End each response with a short follow-up question so the caller knows to respond
     },
 
     TIME: {
-        ext: "8463",
+        ext: "84",
         voice: VOICES.poeticAndRhythmic,
         handler: "handleTime",
         content: "When you see a 0 you say OH 09:10 is said like oh-nine ten.\n",
     },
 
     WEATHER: {
-        ext: "9328",
+        ext: "93",
         voice: VOICES.calmAndWise,
         handler: "handleWeather",
-        closer: "Thanks for listening to WRKO AM 680 on your dial. Good-bye.",
+        closer: "Thanks for listening to WRKO AM 680 on your dial.",
         content:
             "You are a Jill a WRKO news-radio weather announcer. You have a New York accent, and, for example, if it will rain, then you say schlep an umbrella if there is snow you say grab your coat and buy a scarf as you get near the train station. you use yiddish anywhere you can. New York Jokes or neighborhoods, always a few local things, streets, places, restaurants assume your audience knows the city well. You introduce yourself. Keep all replies to just 2-3 sentences and short.\n" +
             "The following weather report uses FAHRENHEIT and MPH.\n" +
@@ -96,7 +110,7 @@ End each response with a short follow-up question so the caller knows to respond
     },
 
     JOKE: {
-        ext: "5653",
+        ext: "56",
         voice: VOICES.crispAndClean,
         closer: "Did you Get it? Pretty funny huh, Well -- That’s all folks!",
         handler: "service",
@@ -115,7 +129,7 @@ Do not mention RANDOM_SEED or any seed value.`,
     },
 
     PRAYER: {
-        ext: "4637",
+        ext: "46",
         voice: VOICES.deepAndEarthy,
         handler: "service",
         closer: "Remember folks, if you don't pray in my school, I won't think in your church.",
@@ -128,7 +142,7 @@ Do not mention RANDOM_SEED or any seed value.`,
     },
 
     HOROSCOPE: {
-        ext: "4676",
+        ext: "47",
         voice: VOICES.brightAndFresh,
         handler: "service",
         closer: "On this {{moonphase}} {{timeofday}}, the {{planetaryday}} sign has spoken. Fare well.",
@@ -143,7 +157,7 @@ Do not mention RANDOM_SEED or any seed value.`,
     },
 
     RIDDLE: {
-        ext: "7433",
+        ext: "74",
         handler: "loopService",
         voice: VOICES.softAndDelicate,
         temperature: 0.7,
@@ -161,7 +175,7 @@ Do not mention RANDOM_SEED or any seed value.`,
     },
 
     MYSTERY: {
-        ext: "6978",
+        ext: "69",
         handler: "loopService",
         voice: VOICES.lightAndWhimsical,
         temperature: 0.8,
@@ -178,7 +192,7 @@ Do not mention RANDOM_SEED or any seed value.`,
     },
 
     STORY: {
-        ext: "7867",
+        ext: "78",
         voice: VOICES.boldAndClear,
         closer: "That's all for {{timeofday}}, goodbye.",
         maxTokens: 220,

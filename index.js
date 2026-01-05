@@ -1,7 +1,7 @@
 const AmiClient = require("asterisk-ami-client");
 const ami = new AmiClient();
 ami.connect("node", "nodepass", {
-    host: "127.0.0.1",
+    host: "asterisk",
     port: 5038,
 })
     .then(() => {
@@ -41,7 +41,7 @@ const handlers = {
 handleNasa: async ({ svc }) => {
   const report = await getNASA();
   if (!report) return speak("NASA is temporarily unavailable. Please try again later.");
-  await speak(await narrateNasa(openai, report));
+  await speak(await narrateReport(openai, report));
   if (svc.closer) await speak(svc.closer);
 },
 
@@ -83,6 +83,8 @@ handleQuake: async ({ svc }) => {
 };
 
 async function narrateReport(openai, raw) {
+  const svc = call.service;
+
   const r = await openai.responses.create({
     model: "gpt-4o-mini",
     temperature: 0.9,
@@ -90,8 +92,7 @@ async function narrateReport(openai, raw) {
     input: [
       {
         role: "system",
-        content:
-          "You are a radio news announcer. Read one report. Be vivid but factual. No speculation. One short paragraph.",
+        content: svc.content,
       },
       { role: "user", content: raw },
     ],
@@ -336,7 +337,7 @@ console.log(`[${callId}] Caller:`, heardRaw);
     }
     res.statusCode = 404;
     res.end();
-}).listen(3000, () => {
+}).listen(3000, "0.0.0.0", () => {
     console.log("Listening on :3000");
 });
 function resetCallFiles(callId) {
@@ -649,6 +650,26 @@ function zodiacYearForDate(date = new Date()) {
     }
     return animals[(y - 4) % 12];
 }
+
+function getLocalHour(tz) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    hour12: false,
+  }).formatToParts(new Date());
+
+  return Number(parts.find(p => p.type === "hour").value);
+}
+
+function getLocalMinute(tz) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    minute: "2-digit",
+  }).formatToParts(new Date());
+  return parts.find(p => p.type === "minute").value;
+}
+
+
 function replaceTokens(content, svc = {}) {
     if (!content) return content;
     const now = new Date();
@@ -660,12 +681,12 @@ function replaceTokens(content, svc = {}) {
         "{{day}}": now.getDate(),
         "{{sign}}": zodiacSignForDate(now),
         "{{season}}": seasonForDate(now),
-        "{{hour}}": now.getHours(),
-        "{{hour12}}": ((now.getHours() + 11) % 12) + 1,
-        "{{hour24}}": now.getHours(), // 0–23
-        "{{minute}}": String(now.getMinutes()).padStart(2, "0"),
-        "{{ampm}}": now.getHours() >= 12 ? "PM" : "AM",
-        "{{greeting}}": now.getHours() < 12 ? "Good morning" : now.getHours() < 17 ? "Good afternoon" : "Good evening",
+        "{{hour}}": getLocalHour(CALLER_TZ),
+        "{{hour12}}": ((getLocalHour(CALLER_TZ) + 11) % 12) + 1,
+        "{{hour24}}": getLocalHour(CALLER_TZ), // 0–23
+        "{{minute}}": getLocalMinute(CALLER_TZ),
+        "{{ampm}}": getLocalHour(CALLER_TZ) >= 12 ? "PM" : "AM",
+        "{{greeting}}": getLocalHour(CALLER_TZ) < 12 ? "Good morning" : getLocalHour(CALLER_TZ) < 17 ? "Good afternoon" : "Good evening",
         "{{zodiacyear}}": zodiacYearForDate(now),
         "{{moonphase}}": moonPhaseForDate(now),
         "{{marsphase}}": marsPhaseForDate(now),
@@ -683,13 +704,13 @@ function replaceTokens(content, svc = {}) {
         }),
         "{{daytype}}": [0, 6].includes(now.getDay()) ? "weekend" : "weekday",
         "{{timeofday}}":
-            now.getHours() < 6
+            getLocalHour(CALLER_TZ) < 6
                 ? "twilight"
-                : now.getHours() < 12
+                : getLocalHour(CALLER_TZ) < 12
                   ? "morning"
-                  : now.getHours() < 17
+                  : getLocalHour(CALLER_TZ) < 17
                     ? "afternoon"
-                    : now.getHours() < 21
+                    : getLocalHour(CALLER_TZ) < 21
                       ? "evening"
                       : "night",
         "{{timezone}}": CALLER_TZ,
