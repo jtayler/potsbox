@@ -47,7 +47,7 @@ const handlers = {
         if (svc.opener) await speak(svc.opener);
     },
 
-    handleOneShot: async ({ svc }) => {
+    service: async ({ svc }) => {
         const reply = await handlers.runServiceLoop({ svc });
         if (reply) await speak(reply);
         if (svc.closer) await speak(svc.closer);
@@ -171,6 +171,18 @@ http.createServer(async (req, res) => {
         }
     }
 
+function waitForStableFile(p, tries = 6, delay = 150) {
+  let last = -1;
+  for (let i = 0; i < tries; i++) {
+    if (!fs.existsSync(p)) return false;
+    const sz = fs.statSync(p).size;
+    if (sz > 0 && sz === last) return true;
+    last = sz;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
+  }
+  return false;
+}
+
     if (req.method === "POST" && req.url.startsWith("/call/reply")) {
         try {
             const { raw, exten, callId } = await initCallState({ req, channelVars: channelVars || {} });
@@ -178,6 +190,12 @@ http.createServer(async (req, res) => {
             log("CALL REPLY FROM:", raw, { exten, callId });
 
             const { wavPath, wavInPath } = callFiles(call.id);
+
+if (!waitForStableFile(wavInPath)) {
+  console.log("Recording not ready, skipping");
+  res.end("loop");
+  return;
+}
 
             try {
                 if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
@@ -257,6 +275,25 @@ function resetCallFiles(callId) {
             if (fs.existsSync(p)) fs.unlinkSync(p);
         } catch {}
     }
+
+  // --- always clean up stale call files (> 1 hour) ---
+  const cutoff = Date.now() - 60 * 60 * 1000;
+
+  for (const f of fs.readdirSync(base)) {
+    if (
+      f.endsWith(".ctx.txt") ||
+      f.endsWith(".ctx.jsonl") ||
+      f.endsWith(".out.wav") ||
+      f.endsWith(".out.ulaw") ||
+      f.endsWith("_in.wav") ||
+      f.endsWith("_in.ulaw")
+    ) {
+      const p = path.join(base, f);
+      try {
+        if (fs.statSync(p).mtimeMs < cutoff) fs.unlinkSync(p);
+      } catch {}
+    }
+  }
 }
 
 async function startCall({ exten }) {
@@ -565,6 +602,22 @@ function mercuryTone(date = new Date()) {
   return phase < 24 ? "mercury-sensitive window" : "mercury steady";
 }
 
+function zodiacYearForDate(date = new Date()) {
+  const animals = [
+    "Rat","Ox","Tiger","Rabbit","Dragon","Snake",
+    "Horse","Goat","Monkey","Rooster","Dog","Pig"
+  ];
+
+  // Zodiac year changes at Lunar New Year (late Jan / Feb).
+  // Simple, honest rule: before Feb 4 → treat as previous year.
+  let y = date.getFullYear();
+  if (date.getMonth() === 0 || (date.getMonth() === 1 && date.getDate() < 4)) {
+    y -= 1;
+  }
+
+  return animals[(y - 4) % 12];
+}
+
 function replaceTokens(content, svc = {}) {
     if (!content) return content;
 
@@ -584,6 +637,7 @@ function replaceTokens(content, svc = {}) {
         "{{minute}}": String(now.getMinutes()).padStart(2, "0"),
         "{{ampm}}": now.getHours() >= 12 ? "PM" : "AM",
         "{{greeting}}": now.getHours() < 12 ? "Good morning" : now.getHours() < 17 ? "Good afternoon" : "Good evening",
+        "{{zodiacyear}}": zodiacYearForDate(now),
         "{{moonphase}}": moonPhaseForDate(now),
         "{{marsphase}}": marsPhaseForDate(now),
         "{{mercurytone}}": mercuryTone(now),
@@ -603,7 +657,7 @@ function replaceTokens(content, svc = {}) {
   [0,6].includes(now.getDay()) ? "weekend" : "weekday",
 "{{timeofday}}":
   now.getHours() < 6
-    ? "late night"
+    ? "twilight"
     : now.getHours() < 12
       ? "morning"
       : now.getHours() < 17
