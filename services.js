@@ -18,8 +18,25 @@ const VOICES = {
 
 // Services structure (single source of truth)
 const SERVICES = {
+
+    THISDAY: {
+        ext: "22",
+        voice: VOICES.storyteller,
+        handler: "handleOnThisDay",
+        closer: "Thank you, goodbye.",
+        content: "You are a reporter on todays events\n",
+    },
+
+    NASA: {
+        ext: "23",
+        voice: VOICES.storyteller,
+        handler: "handleQuake",
+        closer: "Thank you, goodbye.",
+        content: "You are a reporter on todays events\n",
+    },
+
     SCIENCE: {
-        ext: "7243",
+        ext: "72",
         voice: VOICES.strongAndSteady,
         handler: "loopService",
         content: `

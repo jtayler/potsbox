@@ -30,14 +30,39 @@ const handlers = {
     },
     handleWeather: async ({ svc }) => {
         const report = await getWeatherReport();
-        if (!report) return speak("I am sorry but the Weather service is temporarily unavailable.");
+        if (!report) return speak("I am sorry but the Weather service is temporarily unavailable, please try your call again later.");
         await speak(await narrateWeather(openai, report));
-        await speak("If you don't like the weather, wait five minutes.");
+        await speak("And always remember folks, if you don't like the weather, wait five minutes.");
         if (svc.closer) await speak(svc.closer);
     },
     handleOpener: async (svc) => {
         if (svc.opener) await speak(svc.opener);
     },
+handleNasa: async ({ svc }) => {
+  const report = await getNASA();
+  if (!report) return speak("NASA is temporarily unavailable. Please try again later.");
+  await speak(await narrateNasa(openai, report));
+  if (svc.closer) await speak(svc.closer);
+},
+
+    handleOnThisDay: async ({ svc }) => {
+console.log("not his day called");
+  const report = await getOnThisDayReport(); // returns a short raw text blob
+  if (!report) return speak("I am sorry but On This Day is temporarily unavailable, please try again later.");
+
+  await speak(await narrateOnThisDay(openai, report));
+  if (svc.closer) await speak(svc.closer);
+    },
+
+handleQuake: async ({ svc }) => {
+  const report = await getQuakeReport();
+  if (!report)
+    return speak("I am sorry, the earthquake service is temporarily unavailable.");
+
+  await speak(await narrateReport(openai, report));
+  if (svc.closer) await speak(svc.closer);
+},
+
     service: async ({ svc }) => {
         const reply = await handlers.runServiceLoop({ svc });
         if (reply) await speak(reply);
@@ -56,6 +81,107 @@ const handlers = {
         return result === "exit" ? "exit" : true;
     },
 };
+
+async function narrateReport(openai, raw) {
+  const r = await openai.responses.create({
+    model: "gpt-4o-mini",
+    temperature: 0.9,
+    max_output_tokens: 120,
+    input: [
+      {
+        role: "system",
+        content:
+          "You are a radio news announcer. Read one report. Be vivid but factual. No speculation. One short paragraph.",
+      },
+      { role: "user", content: raw },
+    ],
+  });
+
+  return (r.output_text || "").trim();
+}
+
+async function getQuakeReport() {
+  const url =
+    "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson";
+
+  const j = await fetch(url).then(r => r.json());
+  const f = (j.features || []).sort(
+    (a, b) => b.properties.mag - a.properties.mag
+  )[0];
+
+  if (!f) return null;
+
+  return `Strongest earthquake today: magnitude ${f.properties.mag} near ${f.properties.place}.`;
+}
+
+async function getNASA() {
+  try {
+    const url = "https://eonet.gsfc.nasa.gov/api/v3/events?limit=1";
+    const j = await fetch(url).then(r => r.json());
+    const e = j?.events?.[0];
+    if (!e) return null;
+
+    return `NASA reports a ${e.categories[0].title.toLowerCase()} event: ${e.title}.`;
+  } catch {
+    return null;
+  }
+}
+
+async function getOnThisDayReport(date = new Date()) {
+console.log("Get on this day report");
+  try {
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+
+    const url = `https://en.wikipedia.org/api/rest_v1/feed/onthisday/events/${m}/${d}`;
+    const j = await fetch(url, { headers: { "User-Agent": "PotsBox/1.0 (on-this-day)" } }).then(r => {
+      if (!r.ok) throw new Error(`WIKI_${r.status}`);
+      return r.json();
+    });
+
+    const events = (j?.events || []).filter(e => e?.year && e?.text);
+    if (!events.length) return null;
+
+    // pick 2, prefer modern
+    const pool = events.filter(e => e.year >= 1900);
+    const use = pool.length ? pool : events;
+
+    const pick = () => use[Math.floor(Math.random() * use.length)];
+    const clean = (s) => String(s || "").replace(/\s+/g, " ").replace(/\[[^\]]*\]/g, "").trim();
+
+    const a = pick();
+    let b = pick();
+    for (let i = 0; i < 10 && b === a; i++) b = pick();
+
+    const lines = [a, b]
+      .map(e => `On this day in ${e.year}, ${clean(e.text)}`)
+      .map(s => (s.length > 220 ? s.slice(0, 217) + "…" : s));
+
+    // raw “wire copy” for the model to read like a radio host
+    return `City: ${call.city}\nItems:\n- ${lines[0]}\n- ${lines[1]}`;
+  } catch {
+    return null;
+  }
+}
+
+async function narrateOnThisDay(openai, rawReport) {
+  const r = await openai.responses.create({
+    model: "gpt-4o-mini",
+    temperature: 0.8,
+    max_output_tokens: 140,
+    input: [
+      {
+        role: "system",
+        content:
+          "You are a witty radio narrator. Read TWO short 'on this day' items. Keep it punchy, no citations, no links, no lists, no extra facts.",
+      },
+      { role: "user", content: rawReport },
+    ],
+  });
+
+  return (r.output_text || "").trim();
+}
+
 if (!process.env.OPENAI_API_KEY) {
     console.error("Missing OPENAI_API_KEY in environment.");
     process.exit(1);
@@ -136,15 +262,14 @@ http.createServer(async (req, res) => {
         }
     }
     function waitForStableFile(p, tries = 6, delay = 150) {
-        let last = -1;
-        for (let i = 0; i < tries; i++) {
-            if (!fs.existsSync(p)) return false;
-            const sz = fs.statSync(p).size;
-            if (sz > 0 && sz === last) return true;
-            last = sz;
-            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
-        }
-        return false;
+  for (let i = 0; i < tries; i++) {
+    try {
+      execSync(`ffmpeg -v error -i "${p}" -f null -`);
+      return true;
+    } catch {}
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
+  }
+  return false;
     }
     if (req.method === "POST" && req.url.startsWith("/call/reply")) {
         try {
