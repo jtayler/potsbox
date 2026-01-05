@@ -230,7 +230,13 @@ function buildContext() {
     return text || "No prior conversation.";
 }
 async function initCallState({ req, channelVars = {} }) {
+
+console.log("starting call state setup");
+
     const { raw, exten, callId } = parseCallQuery(req);
+console.log("raw is", raw);
+
+
     call.id = callId;
     call.greeted = false;
     call._assistantEnded = false;
