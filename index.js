@@ -1,7 +1,5 @@
 const AmiClient = require("asterisk-ami-client");
-
 const ami = new AmiClient();
-
 ami.connect("node", "nodepass", {
     host: "127.0.0.1",
     port: 5038,
@@ -12,13 +10,10 @@ ami.connect("node", "nodepass", {
     .catch((err) => {
         console.error("AMI connection failed", err);
     });
-
 const SERVICES = require("./services");
-
 const WebSocket = require("ws");
 const http = require("http");
 const path = require("path");
-
 const fs = require("fs");
 const mic = require("mic");
 const OpenAI = require("openai");
@@ -26,7 +21,6 @@ const { exec, execSync } = require("child_process");
 const crypto = require("crypto");
 const HANGUP_RE = /\b(bye|goodbye|hang up|get off|gotta go|have to go|see you)\b/i;
 const url = require("url");
-
 const handlers = {
     handleTime: async ({ svc }) => {
         const { time, seconds } = getTimeParts();
@@ -34,7 +28,6 @@ const handlers = {
         await speak("BEEEP!");
         if (svc.closer) await speak(svc.closer);
     },
-
     handleWeather: async ({ svc }) => {
         const report = await getWeatherReport();
         if (!report) return speak("I am sorry but the Weather service is temporarily unavailable.");
@@ -42,127 +35,99 @@ const handlers = {
         await speak("If you don't like the weather, wait five minutes.");
         if (svc.closer) await speak(svc.closer);
     },
-
     handleOpener: async (svc) => {
         if (svc.opener) await speak(svc.opener);
     },
-
     service: async ({ svc }) => {
         const reply = await handlers.runServiceLoop({ svc });
         if (reply) await speak(reply);
         if (svc.closer) await speak(svc.closer);
         return "exit";
     },
-
     loopService: async ({ svc, user, context }) => {
         const reply = await handlers.runServiceLoop({ svc, user: user ?? "", context });
         if (reply) await speak(reply);
         return "loop";
     },
-
     runServiceLoop,
-
     handleLoopTurn: async (svc, heardRaw) => {
         if (!svc.handler) return false;
         const result = await handlers[svc.handler]({ svc, user: heardRaw });
         return result === "exit" ? "exit" : true;
     },
 };
-
 if (!process.env.OPENAI_API_KEY) {
     console.error("Missing OPENAI_API_KEY in environment.");
     process.exit(1);
 }
-
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 const log = (...a) => console.log(new Date().toISOString(), ...a);
-
 function serviceForExten(exten) {
     return Object.values(SERVICES).find((svc) => svc.ext === exten) || null;
 }
-
 const CALLER_TZ = process.env.CALLER_TZ || "America/New_York";
-
 async function getWeatherReport() {
     const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(call.city)}&count=1&language=en&format=json`;
     const geo = await fetch(geoUrl).then((r) => r.json());
     const hit = geo?.results?.[0];
     if (!hit) return null;
-
     const { latitude, longitude, name, admin1, country } = hit;
     const wxUrl =
         `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
         `&current=temperature_2m,wind_speed_10m,precipitation,weather_code` +
         `&temperature_unit=fahrenheit&wind_speed_unit=mph`;
     const wx = await fetch(wxUrl).then((r) => r.json());
-
     const cur = wx?.current;
     if (!cur) return null;
-
     // Super short “radio” read (no fake precision)
     const place = [name, admin1, country].filter(Boolean).join(", ");
     return `Weather for ${place}: ${Math.round(cur.temperature_2m)} degrees, wind ${Math.round(cur.wind_speed_10m)} miles an hour, precipitation ${cur.precipitation} inches right now.`;
 }
-
 const call = {
     id: crypto.randomUUID(),
     greeted: false,
     service: null,
 };
-
 let channelVars = {};
-
 function appendCtx(role, content) {
     // records each turn
     const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.jsonl`);
     fs.appendFileSync(ctxPath, JSON.stringify({ role, content }) + "\n");
 }
-
 function buildContext() {
     // assembles past turns into a prompt file for the model
     const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.txt`);
-
     if (!fs.existsSync(ctxPath)) return "No prior conversation.";
-
     const text = fs.readFileSync(ctxPath, "utf8").trim();
     return text || "No prior conversation.";
 }
-
 async function initCallState({ req, channelVars = {} }) {
     const { raw, exten, callId } = parseCallQuery(req);
-
     call.id = callId;
     call.greeted = false;
     call._assistantEnded = false;
-
     call.city = channelVars.CALLER_CITY || "New York City";
     call.timezone = channelVars.CALLER_TZ || "America/New_York";
-
     return { raw, exten, callId };
 }
-
 function parseCallQuery(req) {
     const { query } = url.parse(req.url, true);
     const raw = (query.exten || "").trim();
     const [exten, callId] = raw.split("-", 2);
     return { query, raw, exten, callId };
 }
-
 http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url.startsWith("/call/dial")) {
         try {
             const { exten } = await initCallState({ req, channelVars: {} });
-
             if (!exten) {
                 res.statusCode = 400;
                 res.end("Missing exten\n");
                 return;
             }
-
             await originateCall({ exten });
-
             res.end("DIALING\n");
         } catch (err) {
             console.error(err);
@@ -170,47 +135,41 @@ http.createServer(async (req, res) => {
             res.end("ERROR\n");
         }
     }
-
-function waitForStableFile(p, tries = 6, delay = 150) {
-  let last = -1;
-  for (let i = 0; i < tries; i++) {
-    if (!fs.existsSync(p)) return false;
-    const sz = fs.statSync(p).size;
-    if (sz > 0 && sz === last) return true;
-    last = sz;
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
-  }
-  return false;
-}
-
+    function waitForStableFile(p, tries = 6, delay = 150) {
+        let last = -1;
+        for (let i = 0; i < tries; i++) {
+            if (!fs.existsSync(p)) return false;
+            const sz = fs.statSync(p).size;
+            if (sz > 0 && sz === last) return true;
+            last = sz;
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
+        }
+        return false;
+    }
     if (req.method === "POST" && req.url.startsWith("/call/reply")) {
         try {
             const { raw, exten, callId } = await initCallState({ req, channelVars: channelVars || {} });
-
+            if (!call.service) {
+                call.service = serviceForExten(exten);
+            }
             log("CALL REPLY FROM:", raw, { exten, callId });
-
             const { wavPath, wavInPath } = callFiles(call.id);
-
-if (!waitForStableFile(wavInPath)) {
-  console.log("Recording not ready, skipping");
-  res.end("loop");
-  return;
-}
-
+            if (!waitForStableFile(wavInPath)) {
+                console.log("Recording not ready, skipping");
+                res.end("loop");
+                return;
+            }
             try {
                 if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
             } catch {}
-
             if (isTooQuiet(wavInPath)) {
                 await speak("Sorry, I didn’t catch that. Can you speak a bit louder?");
                 res.end("loop");
                 return;
             }
-
             const heardRaw = await transcribeFromFile(wavInPath);
             appendCtx("user", heardRaw);
-            console.log("HEARD:", heardRaw);
-
+            console.log("CALLER:", heardRaw);
             const result = await runCall(heardRaw);
             res.end(result === "exit" ? "exit" : "loop");
         } catch (err) {
@@ -219,29 +178,21 @@ if (!waitForStableFile(wavInPath)) {
             res.end("ERROR");
         }
     }
-
     if (req.method === "POST" && req.url.startsWith("/call/start")) {
         try {
             const { raw, exten, callId } = await initCallState({ req, channelVars: channelVars || {} });
-
             if (!callId) {
                 res.end("exit");
                 return;
             }
-
             log("CALL START FROM:", raw);
-
             const svc = exten === "0" ? SERVICES.OPERATOR : serviceForExten(exten);
-
             if (!svc) {
                 res.end("invalid");
                 return;
             }
-
             call.service = svc;
-
             resetCallFiles(call.id);
-
             await startCall({ exten });
             res.end(isLoopService(call.service) ? "loop" : "exit");
         } catch (err) {
@@ -250,16 +201,13 @@ if (!waitForStableFile(wavInPath)) {
             res.end("ERROR\n");
         }
     }
-
     res.statusCode = 404;
     res.end();
 }).listen(3000, () => {
     console.log("Listening on :3000");
 });
-
 function resetCallFiles(callId) {
     const base = path.join(__dirname, "asterisk-sounds", "en");
-
     const files = [
         `${callId}.ctx.txt`,
         `${callId}.ctx.jsonl`,
@@ -268,44 +216,38 @@ function resetCallFiles(callId) {
         `${callId}_in.wav`,
         `${callId}_in.ulaw`,
     ];
-
     for (const f of files) {
         const p = path.join(base, f);
         try {
             if (fs.existsSync(p)) fs.unlinkSync(p);
         } catch {}
     }
-
-  // --- always clean up stale call files (> 1 hour) ---
-  const cutoff = Date.now() - 60 * 60 * 1000;
-
-  for (const f of fs.readdirSync(base)) {
-    if (
-      f.endsWith(".ctx.txt") ||
-      f.endsWith(".ctx.jsonl") ||
-      f.endsWith(".out.wav") ||
-      f.endsWith(".out.ulaw") ||
-      f.endsWith("_in.wav") ||
-      f.endsWith("_in.ulaw")
-    ) {
-      const p = path.join(base, f);
-      try {
-        if (fs.statSync(p).mtimeMs < cutoff) fs.unlinkSync(p);
-      } catch {}
+    // --- always clean up stale call files (> 1 hour) ---
+    const cutoff = Date.now() - 60 * 60 * 1000;
+    for (const f of fs.readdirSync(base)) {
+        if (
+            f.endsWith(".ctx.txt") ||
+            f.endsWith(".ctx.jsonl") ||
+            f.endsWith(".out.wav") ||
+            f.endsWith(".out.ulaw") ||
+            f.endsWith("_in.wav") ||
+            f.endsWith("_in.ulaw")
+        ) {
+            const p = path.join(base, f);
+            try {
+                if (fs.statSync(p).mtimeMs < cutoff) fs.unlinkSync(p);
+            } catch {}
+        }
     }
-  }
 }
-
 async function startCall({ exten }) {
     call.service = serviceForExten(exten);
     const svc = call.service;
-
     // Opener is terminal for this turn
     if (svc.opener) {
         await speak(replaceTokens(svc.opener, svc));
         return;
     }
-
     // No opener → first model turn
     if (isLoopService(svc)) {
         await handlers[svc.handler]({ svc, user: "" });
@@ -314,33 +256,26 @@ async function startCall({ exten }) {
         if (fn) await fn({ svc });
     }
 }
-
 function buildMessages(svc) {
     const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.jsonl`);
     const messages = [{ role: "system", content: replaceTokens(svc.content, svc) }];
-
     if (!fs.existsSync(ctxPath)) return messages;
-
     const lines = fs.readFileSync(ctxPath, "utf8").split("\n").filter(Boolean);
     for (const line of lines) {
         messages.push(JSON.parse(line));
     }
-
     return messages;
 }
-
 function isTooQuiet(wavPath) {
     const volume = -30; // try -30, -28, -25
     try {
         const cmd = `ffmpeg -hide_banner -nostats -i "${wavPath}" -af volumedetect -f null /dev/null 2>&1`;
         const out = execSync(cmd).toString();
-
         const match = out.match(/max_volume:\s*(-?\d+(\.\d+)?) dB/);
         if (!match) {
             console.log("No max_volume found → treating as silence");
             return true;
         }
-
         const maxDb = parseFloat(match[1]);
         return maxDb < volume;
     } catch (err) {
@@ -348,15 +283,12 @@ function isTooQuiet(wavPath) {
         return true;
     }
 }
-
 function cleanForSpeech(text) {
     return (text || "").replace(/^\s*operator:\s*/i, "").trim();
 }
-
 function assistantEndedCall(text) {
     return /\b(goodbye|good-bye|that’s all|thats all|farewell|hang up)\b/i.test(text);
 }
-
 function callFiles(callId) {
     const baseDir = path.join(__dirname, "asterisk-sounds", "en");
     return {
@@ -367,68 +299,51 @@ function callFiles(callId) {
         wavInPath: path.join(baseDir, `${callId}_in.wav`),
     };
 }
-
 async function speak(text) {
     if (text === "loop" || text === "exit") return;
-
     const svc = call.service;
-
     text = replaceTokens(text, svc);
-
-    console.log("SPOKEN:", text);
+    console.log(`${svc.voice?.toUpperCase()}:`, text);
     const s = cleanForSpeech(text);
-
     if (!s) {
         console.log("Empty text passed to speak.");
         return;
     }
-
     const { wavPath, ulawPath } = callFiles(call.id);
-
     appendCtx("assistant", s);
-
     try {
         if (!svc?.voice) throw new Error("No voice for current service");
-
         const voice = svc.voice;
-
-        console.log("speak in voice", voice);
-
         const speech = await openai.audio.speech.create({
             model: "gpt-4o-mini-tts",
             voice: voice,
             input: s,
             format: "wav",
         });
-
         const wavChunk = Buffer.from(await speech.arrayBuffer());
         if (!wavChunk.length) {
             console.log("No speech data returned.");
             return;
         }
-
         if (!fs.existsSync(wavPath)) {
             fs.writeFileSync(wavPath, wavChunk);
         } else {
             const pcm = wavChunk.subarray(44);
             fs.appendFileSync(wavPath, pcm);
         }
-
         await new Promise((resolve, reject) => {
             exec(`ffmpeg -y -i "${wavPath}" -ar 8000 -ac 1 -f mulaw "${ulawPath}"`, (err) =>
                 err ? reject(err) : resolve()
             );
         });
-
         if (assistantEndedCall(s)) {
-            console.log("Assistant Ended Call.");
+            console.log(`${svc.voice?.toUpperCase()}:`, " ENDED THE CALL");
             call._assistantEnded = true;
         }
     } catch (err) {
         console.error("Error in speak:", err);
     }
 }
-
 function originateCall({ exten }) {
     return ami.send({
         Action: "Originate",
@@ -437,7 +352,6 @@ function originateCall({ exten }) {
         Async: true,
     });
 }
-
 async function transferCall(exten) {
     return ami.send({
         Action: "Originate",
@@ -446,74 +360,58 @@ async function transferCall(exten) {
         Async: true,
     });
 }
-
 function serviceFromIntent(action) {
     if (!action?.startsWith("SERVICE_")) return null;
     const key = action.replace("SERVICE_", "");
     return SERVICES[key] || null;
 }
-
 async function operatorChat(heardRaw) {
     console.log("Handling Operator Chat for:", heardRaw);
-
     try {
         const svc = call.service;
-
         const messages = buildMessages(svc);
         messages.push({ role: "user", content: heardRaw });
-
         const r = await openai.responses.create({
             model: "gpt-4o-mini",
             temperature: 0.7,
             max_output_tokens: 120,
             input: messages,
         });
-
         const reply = (r.output_text || "").replace(/^operator:\s*/i, "").trim();
-
         await speak(reply);
     } catch (err) {
         console.error("Error in operator chat:", err);
     }
 }
-
 function getTimeParts() {
     const now = new Date();
-
     const time = new Intl.DateTimeFormat("en-US", {
         timeZone: CALLER_TZ,
         hour: "numeric",
         minute: "2-digit",
         hour12: true,
     }).format(now);
-
     const seconds = now.getSeconds();
-
     return {
         time,
         seconds,
     };
 }
-
 function secondsToWords(sec) {
     return `${sec} second${sec === 1 ? "" : "s"}`;
 }
-
 function seasonForDate(date = new Date()) {
-  const m = date.getMonth() + 1; // 1–12
-  const d = date.getDate();
-
-  // Meteorological seasons (clean, stable)
-  if (m === 12 || m === 1 || m === 2) return "Winter";
-  if (m >= 3 && m <= 5) return "Spring";
-  if (m >= 6 && m <= 8) return "Summer";
-  return "Autumn";
+    const m = date.getMonth() + 1; // 1–12
+    const d = date.getDate();
+    // Meteorological seasons (clean, stable)
+    if (m === 12 || m === 1 || m === 2) return "Winter";
+    if (m >= 3 && m <= 5) return "Spring";
+    if (m >= 6 && m <= 8) return "Summer";
+    return "Autumn";
 }
-
 function zodiacSignForDate(date = new Date()) {
     const m = date.getMonth() + 1; // 1–12
     const d = date.getDate();
-
     if ((m === 3 && d >= 21) || (m === 4 && d <= 19)) return "Aries";
     if ((m === 4 && d >= 20) || (m === 5 && d <= 20)) return "Taurus";
     if ((m === 5 && d >= 21) || (m === 6 && d <= 20)) return "Gemini";
@@ -527,7 +425,6 @@ function zodiacSignForDate(date = new Date()) {
     if ((m === 1 && d >= 20) || (m === 2 && d <= 18)) return "Aquarius";
     return "Pisces"; // Feb 19 – Mar 20
 }
-
 async function transcribeFromFile(path) {
     const file = fs.createReadStream(path);
     const stt = await openai.audio.transcriptions.create({
@@ -536,94 +433,82 @@ async function transcribeFromFile(path) {
     });
     return (stt.text || "").replace(/[^\w\s,.!?-]/g, "").trim(); // Remove anything not a standard character
 }
-
 function moonPhaseForDate(date = new Date()) {
-  const synodicMonth = 29.530588853; // days
-  const knownNewMoon = new Date(Date.UTC(2000, 0, 6, 18, 14)); // Jan 6 2000
-
-  const daysSince =
-    (date.getTime() - knownNewMoon.getTime()) / 86400000;
-
-  const phase = ((daysSince % synodicMonth) + synodicMonth) % synodicMonth;
-
-  if (phase < 1.84566) return "new moon";
-  if (phase < 5.53699) return "waxing crescent moon";
-  if (phase < 9.22831) return "first quarter moon";
-  if (phase < 12.91963) return "waxing gibbous moon";
-  if (phase < 16.61096) return "full moon";
-  if (phase < 20.30228) return "waning gibbous moon";
-  if (phase < 23.99361) return "last quarter moon";
-  return "waning crescent";
+    const synodicMonth = 29.530588853; // days
+    const knownNewMoon = new Date(Date.UTC(2000, 0, 6, 18, 14)); // Jan 6 2000
+    const daysSince = (date.getTime() - knownNewMoon.getTime()) / 86400000;
+    const phase = ((daysSince % synodicMonth) + synodicMonth) % synodicMonth;
+    if (phase < 1.84566) return "new moon";
+    if (phase < 5.53699) return "waxing crescent moon";
+    if (phase < 9.22831) return "first quarter moon";
+    if (phase < 12.91963) return "waxing gibbous moon";
+    if (phase < 16.61096) return "full moon";
+    if (phase < 20.30228) return "waning gibbous moon";
+    if (phase < 23.99361) return "last quarter moon";
+    return "waning crescent";
 }
-
 function marsPhaseForDate(date = new Date()) {
-  const synodic = 779.94; // days
-  const knownOpposition = new Date(Date.UTC(2022, 11, 8)); // Dec 8 2022
-
-  const days =
-    (date.getTime() - knownOpposition.getTime()) / 86400000;
-
-  const phase = ((days % synodic) + synodic) % synodic;
-
-  if (phase < 60) return "near opposition";
-  if (phase < 120) return "receding";
-  if (phase < 390) return "far side of orbit";
-  if (phase < 450) return "approaching opposition";
-  return "near opposition";
+    const synodic = 779.94; // days
+    const knownOpposition = new Date(Date.UTC(2022, 11, 8)); // Dec 8 2022
+    const days = (date.getTime() - knownOpposition.getTime()) / 86400000;
+    const phase = ((days % synodic) + synodic) % synodic;
+    if (phase < 60) return "near opposition";
+    if (phase < 120) return "receding";
+    if (phase < 390) return "far side of orbit";
+    if (phase < 450) return "approaching opposition";
+    return "near opposition";
 }
-
 function moonIllumination(date = new Date()) {
-  const synodic = 29.530588853;
-  const ref = new Date(Date.UTC(2000, 0, 6, 18, 14));
-  const days = (date - ref) / 86400000;
-  const phase = ((days % synodic) + synodic) % synodic;
-  return Math.round(
-    50 * (1 - Math.cos((2 * Math.PI * phase) / synodic))
-  );
+    const synodic = 29.530588853;
+    const ref = new Date(Date.UTC(2000, 0, 6, 18, 14));
+    const days = (date - ref) / 86400000;
+    const phase = ((days % synodic) + synodic) % synodic;
+    return Math.round(50 * (1 - Math.cos((2 * Math.PI * phase) / synodic)));
 }
-
 function planetaryDay(date = new Date()) {
-  return ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn"][date.getDay()];
+    return ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"][date.getDay()];
 }
-
 function eclipseSeason(date = new Date()) {
-  const cycle = 173.31;
-  const ref = new Date(Date.UTC(2000, 0, 21)); // known season
-  const days = (date - ref) / 86400000;
-  const phase = ((days % cycle) + cycle) % cycle;
-  return phase < 20 || phase > cycle - 20 ? "eclipse season" : "quiet skies";
+    const cycle = 173.31;
+    const ref = new Date(Date.UTC(2000, 0, 21)); // known season
+    const days = (date - ref) / 86400000;
+    const phase = ((days % cycle) + cycle) % cycle;
+    return phase < 20 || phase > cycle - 20 ? "eclipse season" : "quiet skies";
 }
-
 function mercuryTone(date = new Date()) {
-  const synodic = 115.88;
-  const ref = new Date(Date.UTC(2019, 10, 11)); // known retrograde-ish anchor
-  const days = (date - ref) / 86400000;
-  const phase = ((days % synodic) + synodic) % synodic;
-  return phase < 24 ? "mercury-sensitive window" : "mercury steady";
+    const synodic = 115.88;
+    const ref = new Date(Date.UTC(2019, 10, 11)); // known retrograde-ish anchor
+    const days = (date - ref) / 86400000;
+    const phase = ((days % synodic) + synodic) % synodic;
+    return phase < 24 ? "mercury-sensitive window" : "mercury steady";
 }
-
 function zodiacYearForDate(date = new Date()) {
-  const animals = [
-    "Rat","Ox","Tiger","Rabbit","Dragon","Snake",
-    "Horse","Goat","Monkey","Rooster","Dog","Pig"
-  ];
-
-  // Zodiac year changes at Lunar New Year (late Jan / Feb).
-  // Simple, honest rule: before Feb 4 → treat as previous year.
-  let y = date.getFullYear();
-  if (date.getMonth() === 0 || (date.getMonth() === 1 && date.getDate() < 4)) {
-    y -= 1;
-  }
-
-  return animals[(y - 4) % 12];
+    const animals = [
+        "Rat",
+        "Ox",
+        "Tiger",
+        "Rabbit",
+        "Dragon",
+        "Snake",
+        "Horse",
+        "Goat",
+        "Monkey",
+        "Rooster",
+        "Dog",
+        "Pig",
+    ];
+    // Zodiac year changes at Lunar New Year (late Jan / Feb).
+    // Simple, honest rule: before Feb 4 → treat as previous year.
+    let y = date.getFullYear();
+    if (date.getMonth() === 0 || (date.getMonth() === 1 && date.getDate() < 4)) {
+        y -= 1;
+    }
+    return animals[(y - 4) % 12];
 }
-
 function replaceTokens(content, svc = {}) {
     if (!content) return content;
-
     const now = new Date();
     const uuid = crypto.randomUUID();
-
     const tokens = {
         "{{uuid}}": uuid,
         "{{weekday}}": now.toLocaleDateString("en-US", { weekday: "long" }),
@@ -647,36 +532,30 @@ function replaceTokens(content, svc = {}) {
         "{{exten}}": svc.ext,
         "{{service}}": svc.name || svc.key,
         "{{callid}}": call.id,
-
         "{{time}}": now.toLocaleTimeString("en-US", {
             hour: "numeric",
             minute: "2-digit",
             hour12: true,
         }),
-"{{daytype}}":
-  [0,6].includes(now.getDay()) ? "weekend" : "weekday",
-"{{timeofday}}":
-  now.getHours() < 6
-    ? "twilight"
-    : now.getHours() < 12
-      ? "morning"
-      : now.getHours() < 17
-        ? "afternoon"
-        : now.getHours() < 21
-          ? "evening"
-          : "night",
-
+        "{{daytype}}": [0, 6].includes(now.getDay()) ? "weekend" : "weekday",
+        "{{timeofday}}":
+            now.getHours() < 6
+                ? "twilight"
+                : now.getHours() < 12
+                  ? "morning"
+                  : now.getHours() < 17
+                    ? "afternoon"
+                    : now.getHours() < 21
+                      ? "evening"
+                      : "night",
         "{{timezone}}": CALLER_TZ,
     };
-
     let out = content;
     for (const [k, v] of Object.entries(tokens)) {
         out = out.replaceAll(k, String(v));
     }
-
     return out;
 }
-
 async function narrateWeather(openai, rawReport) {
     const svc = SERVICES.WEATHER;
     const r = await openai.responses.create({
@@ -694,36 +573,28 @@ async function narrateWeather(openai, rawReport) {
             },
         ],
     });
-
     return (r.output_text || "").trim();
 }
-
 async function runServiceLoop({ svc }) {
     const messages = buildMessages(svc);
-
     const r = await openai.responses.create({
         model: "gpt-4o-mini",
         temperature: svc.temperature ?? 0.8,
         max_output_tokens: svc.maxTokens ?? 120,
         input: messages,
     });
-
     return (r.output_text || "").trim();
 }
-
 function isLoopService(svc) {
     return typeof svc.handler === "string" && svc.handler.includes("loop");
 }
-
 async function runCall(heardRaw) {
     const svc = call.service;
     if (!svc) return "exit";
-
     if (HANGUP_RE.test(heardRaw)) {
         await speak("Alright. Goodbye.");
         return "exit";
     }
-
     const loopResult = await handlers.handleLoopTurn(svc, heardRaw);
     if (loopResult === "exit") return "exit";
     if (loopResult === true) {
@@ -733,13 +604,11 @@ async function runCall(heardRaw) {
         }
         return "loop";
     }
-
     const intent = await routeIntentMasked(heardRaw);
     if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
         const next = SERVICES[intent.action.replace("SERVICE_", "")];
         if (next && next !== svc) {
             call.service = next;
-
             if (isLoopService(next)) {
                 await handlers.handleOpener(next);
                 await handlers[next.handler]({
@@ -749,20 +618,16 @@ async function runCall(heardRaw) {
                 });
                 return "loop";
             }
-
             // one-shot service
             const fn = handlers[next.handler];
             if (fn) await fn({ svc: next, user: "", context: buildContext() });
             return "exit";
         }
     }
-
     await operatorChat(heardRaw);
-
     if (call._assistantEnded) {
         call._assistantEnded = false;
         return "exit";
     }
-
     return "loop";
 }
