@@ -169,7 +169,9 @@ http.createServer(async (req, res) => {
             }
             const heardRaw = await transcribeFromFile(wavInPath);
             appendCtx("user", heardRaw);
-            console.log("CALLER:", heardRaw);
+
+console.log(`[${callId}] Caller:`, heardRaw);
+
             const result = await runCall(heardRaw);
             res.end(result === "exit" ? "exit" : "loop");
         } catch (err) {
@@ -303,7 +305,13 @@ async function speak(text) {
     if (text === "loop" || text === "exit") return;
     const svc = call.service;
     text = replaceTokens(text, svc);
-    console.log(`${svc.voice?.toUpperCase()}:`, text);
+const voiceName =
+  svc.voice
+    ? svc.voice.charAt(0).toUpperCase() + svc.voice.slice(1)
+    : "Assistant";
+
+console.log(`[${call.id}] ${voiceName}:`, text);
+
     const s = cleanForSpeech(text);
     if (!s) {
         console.log("Empty text passed to speak.");
@@ -337,7 +345,12 @@ async function speak(text) {
             );
         });
         if (assistantEndedCall(s)) {
-            console.log(`${svc.voice?.toUpperCase()}:`, " ENDED THE CALL");
+const voice =
+  svc.voice
+    ? svc.voice.charAt(0).toUpperCase() + svc.voice.slice(1)
+    : "Assistant";
+
+//console.log(`${voice}:`, "ENDED THE CALL");
             call._assistantEnded = true;
         }
     } catch (err) {
