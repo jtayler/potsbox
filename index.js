@@ -334,6 +334,10 @@ function callFiles(callId) {
 async function speak(text) {
     if (text === "loop" || text === "exit") return;
 
+    const svc = call.service;
+
+    text = replaceTokens(text, svc);
+
     console.log("SPOKEN:", text);
     const s = cleanForSpeech(text);
 
@@ -347,7 +351,6 @@ async function speak(text) {
     appendCtx("assistant", s);
 
     try {
-        const svc = call.service;
         if (!svc?.voice) throw new Error("No voice for current service");
 
         const voice = svc.voice;
@@ -459,6 +462,17 @@ function secondsToWords(sec) {
     return `${sec} second${sec === 1 ? "" : "s"}`;
 }
 
+function seasonForDate(date = new Date()) {
+  const m = date.getMonth() + 1; // 1–12
+  const d = date.getDate();
+
+  // Meteorological seasons (clean, stable)
+  if (m === 12 || m === 1 || m === 2) return "Winter";
+  if (m >= 3 && m <= 5) return "Spring";
+  if (m >= 6 && m <= 8) return "Summer";
+  return "Autumn";
+}
+
 function zodiacSignForDate(date = new Date()) {
     const m = date.getMonth() + 1; // 1–12
     const d = date.getDate();
@@ -486,6 +500,71 @@ async function transcribeFromFile(path) {
     return (stt.text || "").replace(/[^\w\s,.!?-]/g, "").trim(); // Remove anything not a standard character
 }
 
+function moonPhaseForDate(date = new Date()) {
+  const synodicMonth = 29.530588853; // days
+  const knownNewMoon = new Date(Date.UTC(2000, 0, 6, 18, 14)); // Jan 6 2000
+
+  const daysSince =
+    (date.getTime() - knownNewMoon.getTime()) / 86400000;
+
+  const phase = ((daysSince % synodicMonth) + synodicMonth) % synodicMonth;
+
+  if (phase < 1.84566) return "new moon";
+  if (phase < 5.53699) return "waxing crescent moon";
+  if (phase < 9.22831) return "first quarter moon";
+  if (phase < 12.91963) return "waxing gibbous moon";
+  if (phase < 16.61096) return "full moon";
+  if (phase < 20.30228) return "waning gibbous moon";
+  if (phase < 23.99361) return "last quarter moon";
+  return "waning crescent";
+}
+
+function marsPhaseForDate(date = new Date()) {
+  const synodic = 779.94; // days
+  const knownOpposition = new Date(Date.UTC(2022, 11, 8)); // Dec 8 2022
+
+  const days =
+    (date.getTime() - knownOpposition.getTime()) / 86400000;
+
+  const phase = ((days % synodic) + synodic) % synodic;
+
+  if (phase < 60) return "near opposition";
+  if (phase < 120) return "receding";
+  if (phase < 390) return "far side of orbit";
+  if (phase < 450) return "approaching opposition";
+  return "near opposition";
+}
+
+function moonIllumination(date = new Date()) {
+  const synodic = 29.530588853;
+  const ref = new Date(Date.UTC(2000, 0, 6, 18, 14));
+  const days = (date - ref) / 86400000;
+  const phase = ((days % synodic) + synodic) % synodic;
+  return Math.round(
+    50 * (1 - Math.cos((2 * Math.PI * phase) / synodic))
+  );
+}
+
+function planetaryDay(date = new Date()) {
+  return ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn"][date.getDay()];
+}
+
+function eclipseSeason(date = new Date()) {
+  const cycle = 173.31;
+  const ref = new Date(Date.UTC(2000, 0, 21)); // known season
+  const days = (date - ref) / 86400000;
+  const phase = ((days % cycle) + cycle) % cycle;
+  return phase < 20 || phase > cycle - 20 ? "eclipse season" : "quiet skies";
+}
+
+function mercuryTone(date = new Date()) {
+  const synodic = 115.88;
+  const ref = new Date(Date.UTC(2019, 10, 11)); // known retrograde-ish anchor
+  const days = (date - ref) / 86400000;
+  const phase = ((days % synodic) + synodic) % synodic;
+  return phase < 24 ? "mercury-sensitive window" : "mercury steady";
+}
+
 function replaceTokens(content, svc = {}) {
     if (!content) return content;
 
@@ -498,13 +577,19 @@ function replaceTokens(content, svc = {}) {
         "{{month}}": now.toLocaleDateString("en-US", { month: "long" }),
         "{{day}}": now.getDate(),
         "{{sign}}": zodiacSignForDate(now),
+        "{{season}}": seasonForDate(now),
         "{{hour}}": now.getHours(),
         "{{hour12}}": ((now.getHours() + 11) % 12) + 1,
         "{{hour24}}": now.getHours(), // 0–23
         "{{minute}}": String(now.getMinutes()).padStart(2, "0"),
         "{{ampm}}": now.getHours() >= 12 ? "PM" : "AM",
         "{{greeting}}": now.getHours() < 12 ? "Good morning" : now.getHours() < 17 ? "Good afternoon" : "Good evening",
-
+        "{{moonphase}}": moonPhaseForDate(now),
+        "{{marsphase}}": marsPhaseForDate(now),
+        "{{mercurytone}}": mercuryTone(now),
+        "{{eclipseseason}}": eclipseSeason(now),
+        "{{moonillumination}}": moonIllumination(now),
+        "{{planetaryday}}": planetaryDay(now),
         "{{exten}}": svc.ext,
         "{{service}}": svc.name || svc.key,
         "{{callid}}": call.id,
@@ -514,15 +599,18 @@ function replaceTokens(content, svc = {}) {
             minute: "2-digit",
             hour12: true,
         }),
-
-        "{{timeofday}}":
-            now.getHours() < 12
-                ? "morning"
-                : now.getHours() < 17
-                  ? "afternoon"
-                  : now.getHours() < 21
-                    ? "evening"
-                    : "night",
+"{{daytype}}":
+  [0,6].includes(now.getDay()) ? "weekend" : "weekday",
+"{{timeofday}}":
+  now.getHours() < 6
+    ? "late night"
+    : now.getHours() < 12
+      ? "morning"
+      : now.getHours() < 17
+        ? "afternoon"
+        : now.getHours() < 21
+          ? "evening"
+          : "night",
 
         "{{timezone}}": CALLER_TZ,
     };
