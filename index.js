@@ -1,3 +1,5 @@
+const { DateTime } = require("luxon");
+
 const AmiClient = require("asterisk-ami-client");
 const ami = new AmiClient();
 ami.connect("node", "nodepass", {
@@ -11,11 +13,9 @@ ami.connect("node", "nodepass", {
         console.error("AMI connection failed", err);
     });
 const SERVICES = require("./services");
-const WebSocket = require("ws");
 const http = require("http");
 const path = require("path");
 const fs = require("fs");
-const mic = require("mic");
 const OpenAI = require("openai");
 const { exec, execSync } = require("child_process");
 const crypto = require("crypto");
@@ -23,7 +23,8 @@ const HANGUP_RE = /\b(bye|goodbye|hang up|get off|gotta go|have to go|see you)\b
 const url = require("url");
 const handlers = {
     handleTime: async ({ svc }) => {
-        const { time, seconds } = getTimeParts();
+const time = call.now.toFormat("h:mm a");
+const seconds = call.now.second;
         await speak(`At the tone, the time will be ${time} and ${secondsToWords(seconds)}.`);
         await speak("BEEEP!");
         if (svc.closer) await speak(svc.closer);
@@ -49,7 +50,6 @@ return "loop";
 }
   await speak(await narrateReport(openai, report));
   if (svc.closer) await speak(svc.closer);
-  if (svc.handler.includes("loop")) return "loop";
   return "loop";
 },
 
@@ -142,11 +142,11 @@ async function getNASA() {
   }
 }
 
-async function getOnThisDayReport(date = new Date()) {
+async function getOnThisDayReport(date = call.now) {
 console.log("Get on this day report");
   try {
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
+const m = String(date.month).padStart(2,"0");
+const d = String(date.day).padStart(2,"0");
 
     const url = `https://en.wikipedia.org/api/rest_v1/feed/onthisday/events/${m}/${d}`;
     const j = await fetch(url, { headers: { "User-Agent": "PotsBox/1.0 (on-this-day)" } }).then(r => {
@@ -204,11 +204,10 @@ if (!process.env.OPENAI_API_KEY) {
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
-const log = (...a) => console.log(new Date().toISOString(), ...a);
+const log = (...a) => console.log(call.now.toISO(), ...a);
 function serviceForExten(exten) {
     return Object.values(SERVICES).find((svc) => svc.ext === exten) || null;
 }
-const CALLER_TZ = process.env.CALLER_TZ || "America/New_York";
 async function getWeatherReport() {
     const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(call.city)}&count=1&language=en&format=json`;
     const geo = await fetch(geoUrl).then((r) => r.json());
@@ -237,13 +236,6 @@ function appendCtx(role, content) {
     const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.jsonl`);
     fs.appendFileSync(ctxPath, JSON.stringify({ role, content }) + "\n");
 }
-function buildContext() {
-    // assembles past turns into a prompt file for the model
-    const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.txt`);
-    if (!fs.existsSync(ctxPath)) return "No prior conversation.";
-    const text = fs.readFileSync(ctxPath, "utf8").trim();
-    return text || "No prior conversation.";
-}
 async function initCallState({ req, channelVars = {} }) {
 
 console.log("starting call state setup");
@@ -257,6 +249,7 @@ console.log("raw is", raw);
     call._assistantEnded = false;
     call.city = channelVars.CALLER_CITY || "New York City";
     call.timezone = channelVars.CALLER_TZ || "America/New_York";
+    call.now = DateTime.now().setZone(call.timezone || "America/New_York");
     return { raw, exten, callId };
 }
 function parseCallQuery(req) {
@@ -548,47 +541,35 @@ async function operatorChat(heardRaw) {
         console.error("Error in operator chat:", err);
     }
 }
-function getTimeParts() {
-    const now = new Date();
-    const time = new Intl.DateTimeFormat("en-US", {
-        timeZone: CALLER_TZ,
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-    }).format(now);
-    const seconds = now.getSeconds();
-    return {
-        time,
-        seconds,
-    };
-}
+
 function secondsToWords(sec) {
     return `${sec} second${sec === 1 ? "" : "s"}`;
 }
-function seasonForDate(date = new Date()) {
-    const m = date.getMonth() + 1; // 1–12
-    const d = date.getDate();
-    // Meteorological seasons (clean, stable)
-    if (m === 12 || m === 1 || m === 2) return "Winter";
-    if (m >= 3 && m <= 5) return "Spring";
-    if (m >= 6 && m <= 8) return "Summer";
-    return "Autumn";
+function seasonForDate(date = call.now) {
+  const m = date.month; // 1–12 (Luxon already)
+
+  // Meteorological seasons
+  if (m === 12 || m === 1 || m === 2) return "Winter";
+  if (m >= 3 && m <= 5) return "Spring";
+  if (m >= 6 && m <= 8) return "Summer";
+  return "Autumn";
 }
-function zodiacSignForDate(date = new Date()) {
-    const m = date.getMonth() + 1; // 1–12
-    const d = date.getDate();
-    if ((m === 3 && d >= 21) || (m === 4 && d <= 19)) return "Aries";
-    if ((m === 4 && d >= 20) || (m === 5 && d <= 20)) return "Taurus";
-    if ((m === 5 && d >= 21) || (m === 6 && d <= 20)) return "Gemini";
-    if ((m === 6 && d >= 21) || (m === 7 && d <= 22)) return "Cancer";
-    if ((m === 7 && d >= 23) || (m === 8 && d <= 22)) return "Leo";
-    if ((m === 8 && d >= 23) || (m === 9 && d <= 22)) return "Virgo";
-    if ((m === 9 && d >= 23) || (m === 10 && d <= 22)) return "Libra";
-    if ((m === 10 && d >= 23) || (m === 11 && d <= 21)) return "Scorpio";
-    if ((m === 11 && d >= 22) || (m === 12 && d <= 21)) return "Sagittarius";
-    if ((m === 12 && d >= 22) || (m === 1 && d <= 19)) return "Capricorn";
-    if ((m === 1 && d >= 20) || (m === 2 && d <= 18)) return "Aquarius";
-    return "Pisces"; // Feb 19 – Mar 20
+function zodiacSignForDate(date = call.now) {
+  const m = date.month; // 1–12
+  const d = date.day;
+
+  if ((m === 3 && d >= 21) || (m === 4 && d <= 19)) return "Aries";
+  if ((m === 4 && d >= 20) || (m === 5 && d <= 20)) return "Taurus";
+  if ((m === 5 && d >= 21) || (m === 6 && d <= 20)) return "Gemini";
+  if ((m === 6 && d >= 21) || (m === 7 && d <= 22)) return "Cancer";
+  if ((m === 7 && d >= 23) || (m === 8 && d <= 22)) return "Leo";
+  if ((m === 8 && d >= 23) || (m === 9 && d <= 22)) return "Virgo";
+  if ((m === 9 && d >= 23) || (m === 10 && d <= 22)) return "Libra";
+  if ((m === 10 && d >= 23) || (m === 11 && d <= 21)) return "Scorpio";
+  if ((m === 11 && d >= 22) || (m === 12 && d <= 21)) return "Sagittarius";
+  if ((m === 12 && d >= 22) || (m === 1 && d <= 19)) return "Capricorn";
+  if ((m === 1 && d >= 20) || (m === 2 && d <= 18)) return "Aquarius";
+  return "Pisces";
 }
 async function transcribeFromFile(path) {
     const file = fs.createReadStream(path);
@@ -598,143 +579,157 @@ async function transcribeFromFile(path) {
     });
     return (stt.text || "").replace(/[^\w\s,.!?-]/g, "").trim(); // Remove anything not a standard character
 }
-function moonPhaseForDate(date = new Date()) {
-    const synodicMonth = 29.530588853; // days
-    const knownNewMoon = new Date(Date.UTC(2000, 0, 6, 18, 14)); // Jan 6 2000
-    const daysSince = (date.getTime() - knownNewMoon.getTime()) / 86400000;
-    const phase = ((daysSince % synodicMonth) + synodicMonth) % synodicMonth;
-    if (phase < 1.84566) return "new moon";
-    if (phase < 5.53699) return "waxing crescent moon";
-    if (phase < 9.22831) return "first quarter moon";
-    if (phase < 12.91963) return "waxing gibbous moon";
-    if (phase < 16.61096) return "full moon";
-    if (phase < 20.30228) return "waning gibbous moon";
-    if (phase < 23.99361) return "last quarter moon";
-    return "waning crescent";
+function moonPhaseForDate(dt = call.now) {
+  const utc = dt.toUTC();
+
+  const synodicMonth = 29.530588853; // days
+  const knownNewMoon = DateTime.utc(2000, 1, 6, 18, 14);
+
+  const daysSince =
+    (utc.toMillis() - knownNewMoon.toMillis()) / 86400000;
+
+  const phase =
+    ((daysSince % synodicMonth) + synodicMonth) % synodicMonth;
+
+  if (phase < 1.84566) return "new moon";
+  if (phase < 5.53699) return "waxing crescent moon";
+  if (phase < 9.22831) return "first quarter moon";
+  if (phase < 12.91963) return "waxing gibbous moon";
+  if (phase < 16.61096) return "full moon";
+  if (phase < 20.30228) return "waning gibbous moon";
+  if (phase < 23.99361) return "last quarter moon";
+  return "waning crescent";
 }
-function marsPhaseForDate(date = new Date()) {
-    const synodic = 779.94; // days
-    const knownOpposition = new Date(Date.UTC(2022, 11, 8)); // Dec 8 2022
-    const days = (date.getTime() - knownOpposition.getTime()) / 86400000;
-    const phase = ((days % synodic) + synodic) % synodic;
-    if (phase < 60) return "near opposition";
-    if (phase < 120) return "receding";
-    if (phase < 390) return "far side of orbit";
-    if (phase < 450) return "approaching opposition";
-    return "near opposition";
+function marsPhaseForDate(dt = call.now) {
+  const utc = dt.toUTC();
+
+  const synodic = 779.94; // days
+  const knownOpposition = DateTime.utc(2022, 12, 8);
+
+  const days =
+    (utc.toMillis() - knownOpposition.toMillis()) / 86400000;
+
+  const phase =
+    ((days % synodic) + synodic) % synodic;
+
+  if (phase < 60)  return "near opposition";
+  if (phase < 120) return "receding";
+  if (phase < 390) return "far side of orbit";
+  if (phase < 450) return "approaching opposition";
+  return "near opposition";
 }
-function moonIllumination(date = new Date()) {
-    const synodic = 29.530588853;
-    const ref = new Date(Date.UTC(2000, 0, 6, 18, 14));
-    const days = (date - ref) / 86400000;
-    const phase = ((days % synodic) + synodic) % synodic;
-    return Math.round(50 * (1 - Math.cos((2 * Math.PI * phase) / synodic)));
+function moonIllumination(dt = call.now) {
+  const utc = dt.toUTC();
+
+  const synodic = 29.530588853;
+  const ref = DateTime.utc(2000, 1, 6, 18, 14);
+
+  const days =
+    (utc.toMillis() - ref.toMillis()) / 86400000;
+
+  const phase =
+    ((days % synodic) + synodic) % synodic;
+
+  return Math.round(
+    50 * (1 - Math.cos((2 * Math.PI * phase) / synodic))
+  );
 }
-function planetaryDay(date = new Date()) {
-    return ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"][date.getDay()];
-}
-function eclipseSeason(date = new Date()) {
-    const cycle = 173.31;
-    const ref = new Date(Date.UTC(2000, 0, 21)); // known season
-    const days = (date - ref) / 86400000;
-    const phase = ((days % cycle) + cycle) % cycle;
-    return phase < 20 || phase > cycle - 20 ? "eclipse season" : "quiet skies";
-}
-function mercuryTone(date = new Date()) {
-    const synodic = 115.88;
-    const ref = new Date(Date.UTC(2019, 10, 11)); // known retrograde-ish anchor
-    const days = (date - ref) / 86400000;
-    const phase = ((days % synodic) + synodic) % synodic;
-    return phase < 24 ? "mercury-sensitive window" : "mercury steady";
-}
-function zodiacYearForDate(date = new Date()) {
-    const animals = [
-        "Rat",
-        "Ox",
-        "Tiger",
-        "Rabbit",
-        "Dragon",
-        "Snake",
-        "Horse",
-        "Goat",
-        "Monkey",
-        "Rooster",
-        "Dog",
-        "Pig",
-    ];
-    // Zodiac year changes at Lunar New Year (late Jan / Feb).
-    // Simple, honest rule: before Feb 4 → treat as previous year.
-    let y = date.getFullYear();
-    if (date.getMonth() === 0 || (date.getMonth() === 1 && date.getDate() < 4)) {
-        y -= 1;
-    }
-    return animals[(y - 4) % 12];
+function planetaryDay(dt = call.now) {
+  // Luxon: weekday 1=Mon … 7=Sun
+  return ["Moon","Mars","Mercury","Jupiter","Venus","Saturn","Sun"][dt.weekday - 1];
 }
 
-function getLocalHour(tz) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hour: "numeric",
-    hour12: false,
-  }).formatToParts(new Date());
+function eclipseSeason(dt = call.now) {
+  const utc = dt.toUTC();
 
-  return Number(parts.find(p => p.type === "hour").value);
+  const cycle = 173.31;
+  const ref = DateTime.utc(2000, 1, 21);
+
+  const days =
+    (utc.toMillis() - ref.toMillis()) / 86400000;
+
+  const phase =
+    ((days % cycle) + cycle) % cycle;
+
+  return phase < 20 || phase > cycle - 20
+    ? "eclipse season"
+    : "quiet skies";
 }
+function mercuryTone(dt = call.now) {
+  const utc = dt.toUTC();
 
-function getLocalMinute(tz) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    minute: "2-digit",
-  }).formatToParts(new Date());
-  return parts.find(p => p.type === "minute").value;
+  const synodic = 115.88;
+  const ref = DateTime.utc(2019, 11, 11); // Nov 11 2019
+
+  const days =
+    (utc.toMillis() - ref.toMillis()) / 86400000;
+
+  const phase =
+    ((days % synodic) + synodic) % synodic;
+
+  return phase < 24
+    ? "mercury-sensitive window"
+    : "mercury steady";
 }
+function zodiacYearForDate(dt = call.now) {
+  const animals = [
+    "Rat","Ox","Tiger","Rabbit","Dragon","Snake",
+    "Horse","Goat","Monkey","Rooster","Dog","Pig",
+  ];
 
+  let y = dt.year;
+
+  // Lunar New Year cutoff (simple, stable rule)
+  if (dt.month === 1 || (dt.month === 2 && dt.day < 4)) {
+    y -= 1;
+  }
+
+  return animals[(y - 4 + 12) % 12];
+}
 
 function replaceTokens(content, svc = {}) {
     if (!content) return content;
-    const now = new Date();
-    const uuid = crypto.randomUUID();
-    const tokens = {
-        "{{uuid}}": uuid,
-        "{{weekday}}": now.toLocaleDateString("en-US", { weekday: "long" }),
-        "{{month}}": now.toLocaleDateString("en-US", { month: "long" }),
-        "{{day}}": now.getDate(),
-        "{{sign}}": zodiacSignForDate(now),
-        "{{season}}": seasonForDate(now),
-        "{{hour}}": getLocalHour(CALLER_TZ),
-        "{{hour12}}": ((getLocalHour(CALLER_TZ) + 11) % 12) + 1,
-        "{{hour24}}": getLocalHour(CALLER_TZ), // 0–23
-        "{{minute}}": getLocalMinute(CALLER_TZ),
-        "{{ampm}}": getLocalHour(CALLER_TZ) >= 12 ? "PM" : "AM",
-        "{{greeting}}": getLocalHour(CALLER_TZ) < 12 ? "Good morning" : getLocalHour(CALLER_TZ) < 17 ? "Good afternoon" : "Good evening",
-        "{{zodiacyear}}": zodiacYearForDate(now),
-        "{{moonphase}}": moonPhaseForDate(now),
-        "{{marsphase}}": marsPhaseForDate(now),
-        "{{mercurytone}}": mercuryTone(now),
-        "{{eclipseseason}}": eclipseSeason(now),
-        "{{moonillumination}}": moonIllumination(now),
-        "{{planetaryday}}": planetaryDay(now),
-        "{{exten}}": svc.ext,
-        "{{service}}": svc.name || svc.key,
-        "{{callid}}": call.id,
-        "{{time}}": now.toLocaleTimeString("en-US", {
-            hour: "numeric",
-            minute: "2-digit",
-            hour12: true,
-        }),
-        "{{daytype}}": [0, 6].includes(now.getDay()) ? "weekend" : "weekday",
-        "{{timeofday}}":
-            getLocalHour(CALLER_TZ) < 6
-                ? "twilight"
-                : getLocalHour(CALLER_TZ) < 12
-                  ? "morning"
-                  : getLocalHour(CALLER_TZ) < 17
-                    ? "afternoon"
-                    : getLocalHour(CALLER_TZ) < 21
-                      ? "evening"
-                      : "night",
-        "{{timezone}}": CALLER_TZ,
-    };
+const now = call.now; // Luxon DateTime
+
+const hour24 = now.hour;
+const hour12 = now.toFormat("h");
+const minute = now.toFormat("mm");
+const ampm = now.toFormat("a");
+
+const tokens = {
+  "{{uuid}}": crypto.randomUUID(),
+
+  "{{weekday}}": now.toFormat("cccc"),
+  "{{month}}": now.toFormat("LLLL"),
+  "{{day}}": now.day,
+
+  "{{hour}}": hour24,
+  "{{hour12}}": hour12,
+  "{{hour24}}": hour24,
+  "{{minute}}": minute,
+  "{{ampm}}": ampm,
+
+  "{{time}}": now.toFormat("h:mm a"),
+  "{{timezone}}": now.zoneName,
+
+  "{{greeting}}":
+    hour24 < 12 ? "Good morning" :
+    hour24 < 17 ? "Good afternoon" :
+    "Good evening",
+
+  "{{timeofday}}":
+    hour24 < 6  ? "twilight" :
+    hour24 < 12 ? "morning" :
+    hour24 < 17 ? "afternoon" :
+    hour24 < 21 ? "evening" :
+    "night",
+
+  "{{daytype}}": now.weekday >= 6 ? "weekend" : "weekday",
+
+  "{{exten}}": svc.ext,
+  "{{service}}": svc.name || svc.key,
+  "{{callid}}": call.id,
+};
     let out = content;
     for (const [k, v] of Object.entries(tokens)) {
         out = out.replaceAll(k, String(v));

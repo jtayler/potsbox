@@ -13,6 +13,7 @@
   "dependencies": {
     "asterisk-ami-client": "^1.1.5",
     "debug": "^4.4.3",
+    "luxon": "^3.7.2",
     "mic": "^2.1.2",
     "node-fetch": "^3.3.2",
     "openai": "^6.15.0",
