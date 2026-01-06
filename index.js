@@ -38,11 +38,14 @@ const handlers = {
     handleOpener: async (svc) => {
         if (svc.opener) await speak(svc.opener);
     },
-handleNasa: async ({ svc }) => {
+
+handleNasaLoop: async ({ svc }) => {
   const report = await getNASA();
   if (!report) return speak("NASA is temporarily unavailable. Please try again later.");
   await speak(await narrateReport(openai, report));
   if (svc.closer) await speak(svc.closer);
+  if (svc.handler.includes("loop")) return "loop";
+  return true;
 },
 
     handleOnThisDay: async ({ svc }) => {

@@ -42,9 +42,8 @@ const SERVICES = {
     NASA: {
         ext: "62",
         voice: VOICES.lightAndWhimsical,
-        handler: "handleNasa",
-        closer: "Brought to you by NASA, For the benefit of all.",
-        content: "It's now {{weekday}} {{timeofday}} which you can mention if it makes sense to. You are a NASA reporter, Jason Tilhide and introduce yourself on todays events but you are a childish comic using animal references.\n" +
+        handler: "handleNasaLoop",
+        content: "It's now {{weekday}} {{timeofday}} which you can mention if it makes sense to. You are a NASA reporter, Lisa Smallhide and introduce yourself on todays events but you are a childish comic using animal references. After your report ask a simple question that anyone can quickly respond to in a word or two, offer choices or prompt a response. Your report must be no more than 4 sentences and it is spoken text\n" +
             "Never use emojis.\n" +
             "Use RANDOM_SEED={{uuid}} to introduce subtle randomness in content selection and phrasing",
     },
