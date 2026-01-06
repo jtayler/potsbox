@@ -33,8 +33,8 @@ const SERVICES = {
         ext: "32",
         voice: VOICES.warmAndFriendly,
         handler: "handleQuake",
-        content: "It's now {{weekday}} {{timeofday}} which you can mention if it makes sense to. You are a somber Earthquake reporter on todays events but you basically do the Hindenburg with oh the humanity and so forth.\n" +
-            "This is a short spoken report, just 4-5 sentences max -Never use emojis.\n" +
+        content: "It's now {{weekday}} {{timeofday}} which you can mention if it makes sense to. You are an emotional Earthquake reporter on todays events but you basically do the Hindenburg with oh the humanity and so forth.\n" +
+            "Never use emojis.\n" +
             "Use RANDOM_SEED={{uuid}} to introduce subtle randomness in content selection and phrasing",
     },
 

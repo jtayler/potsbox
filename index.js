@@ -27,6 +27,7 @@ const handlers = {
         await speak(`At the tone, the time will be ${time} and ${secondsToWords(seconds)}.`);
         await speak("BEEEP!");
         if (svc.closer) await speak(svc.closer);
+        return "exit";
     },
     handleWeather: async ({ svc }) => {
         const report = await getWeatherReport();
@@ -34,6 +35,7 @@ const handlers = {
         await speak(await narrateWeather(openai, report));
         await speak("And always remember folks, if you don't like the weather, wait five minutes.");
         if (svc.closer) await speak(svc.closer);
+        return "exit";
     },
     handleOpener: async (svc) => {
         if (svc.opener) await speak(svc.opener);
@@ -41,11 +43,14 @@ const handlers = {
 
 handleNasaLoop: async ({ svc }) => {
   const report = await getNASA();
-  if (!report) return speak("NASA is temporarily unavailable. Please try again later.");
+  if (!report) {
+speak("NASA is temporarily unavailable. Please try again later.");
+return "loop";
+}
   await speak(await narrateReport(openai, report));
   if (svc.closer) await speak(svc.closer);
   if (svc.handler.includes("loop")) return "loop";
-  return true;
+  return "loop";
 },
 
     handleOnThisDay: async ({ svc }) => {
@@ -55,6 +60,7 @@ console.log("not his day called");
 
   await speak(await narrateOnThisDay(openai, report));
   if (svc.closer) await speak(svc.closer);
+        return "exit";
     },
 
 handleQuake: async ({ svc }) => {
@@ -64,6 +70,7 @@ handleQuake: async ({ svc }) => {
 
   await speak(await narrateReport(openai, report));
   if (svc.closer) await speak(svc.closer);
+  return "exit";
 },
 
     service: async ({ svc }) => {
@@ -78,11 +85,15 @@ handleQuake: async ({ svc }) => {
         return "loop";
     },
     runServiceLoop,
-    handleLoopTurn: async (svc, heardRaw) => {
-        if (!svc.handler) return false;
-        const result = await handlers[svc.handler]({ svc, user: heardRaw });
-        return result === "exit" ? "exit" : true;
-    },
+handleLoopTurn: async (svc, heardRaw) => {
+  if (!svc?.handler) return "exit";
+  const decision = await handlers[svc.handler]({ svc, user: heardRaw });
+
+  if (decision !== "loop" && decision !== "exit") {
+    throw new Error(`Handler ${svc.handler} returned invalid: ${decision}`);
+  }
+  return decision;
+},
 };
 
 async function narrateReport(openai, raw) {
@@ -281,40 +292,46 @@ http.createServer(async (req, res) => {
   }
   return false;
     }
-    if (req.method === "POST" && req.url.startsWith("/call/reply")) {
-        try {
-            const { raw, exten, callId } = await initCallState({ req, channelVars: channelVars || {} });
-            if (!call.service) {
-                call.service = serviceForExten(exten);
-            }
-            log("CALL REPLY FROM:", raw, { exten, callId });
-            const { wavPath, wavInPath } = callFiles(call.id);
-            if (!waitForStableFile(wavInPath)) {
-                console.log("Recording not ready, skipping");
-                res.end("loop");
-                return;
-            }
-            try {
-                if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
-            } catch {}
-            if (isTooQuiet(wavInPath)) {
-                await speak("Sorry, I didn’t catch that. Can you speak a bit louder?");
-                res.end("loop");
-                return;
-            }
-            const heardRaw = await transcribeFromFile(wavInPath);
-            appendCtx("user", heardRaw);
+if (req.method === "POST" && req.url.startsWith("/call/reply")) {
+  try {
+    const { exten } = await initCallState({ req, channelVars });
+    if (!call.service) call.service = serviceForExten(exten);
 
-console.log(`[${callId}] Caller:`, heardRaw);
-
-            const result = await runCall(heardRaw);
-            res.end(result === "exit" ? "exit" : "loop");
-        } catch (err) {
-            console.error(err);
-            res.statusCode = 500;
-            res.end("ERROR");
-        }
+    const { wavInPath } = callFiles(call.id);
+    if (!waitForStableFile(wavInPath)) {
+      res.end("exit");           // Asterisk retry, not logic
+      return;
     }
+
+    if (isTooQuiet(wavInPath)) {
+      await speak("Sorry, I didn’t catch that.");
+      res.end("exit");
+      return;
+    }
+
+    const heardRaw = await transcribeFromFile(wavInPath);
+    appendCtx("user", heardRaw);
+
+const { wavPath } = callFiles(call.id);
+try {
+  if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
+} catch {}
+
+
+    const decision = await runCall(heardRaw);
+
+    if (decision !== "loop" && decision !== "exit") {
+      throw new Error(`Invalid handler return: ${decision}`);
+    }
+
+    res.end(decision);
+  } catch (err) {
+    console.error(err);
+    res.statusCode = 500;
+    res.end("exit"); // fail closed
+  }
+}
+
     if (req.method === "POST" && req.url.startsWith("/call/start")) {
         try {
             const { raw, exten, callId } = await initCallState({ req, channelVars: channelVars || {} });
@@ -757,45 +774,21 @@ function isLoopService(svc) {
     return typeof svc.handler === "string" && svc.handler.includes("loop");
 }
 async function runCall(heardRaw) {
-    const svc = call.service;
-    if (!svc) return "exit";
-    if (HANGUP_RE.test(heardRaw)) {
-        await speak("Alright. Goodbye.");
-        return "exit";
-    }
-    const loopResult = await handlers.handleLoopTurn(svc, heardRaw);
-    if (loopResult === "exit") return "exit";
-    if (loopResult === true) {
-        if (call._assistantEnded) {
-            call._assistantEnded = false;
-            return "exit";
-        }
-        return "loop";
-    }
-    const intent = await routeIntentMasked(heardRaw);
-    if (intent.action?.startsWith("SERVICE_") && intent.confidence > 0.6) {
-        const next = SERVICES[intent.action.replace("SERVICE_", "")];
-        if (next && next !== svc) {
-            call.service = next;
-            if (isLoopService(next)) {
-                await handlers.handleOpener(next);
-                await handlers[next.handler]({
-                    svc: next,
-                    user: "",
-                    context: buildContext(),
-                });
-                return "loop";
-            }
-            // one-shot service
-            const fn = handlers[next.handler];
-            if (fn) await fn({ svc: next, user: "", context: buildContext() });
-            return "exit";
-        }
-    }
-    await operatorChat(heardRaw);
-    if (call._assistantEnded) {
-        call._assistantEnded = false;
-        return "exit";
-    }
-    return "loop";
+  const svc = call.service;
+  if (!svc) return "exit";
+
+  if (HANGUP_RE.test(heardRaw)) {
+    await speak("Alright. Goodbye.");
+    return "exit";
+  }
+
+  // Let the handler speak and return "loop" or "exit"
+  const decision = await handlers.handleLoopTurn(svc, heardRaw);
+
+  // 🔒 HARD RULE: one-shot services can NEVER loop
+  if (!isLoopService(svc)) {
+    return "exit";
+  }
+
+  return decision; // loop services only
 }
