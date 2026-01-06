@@ -18,13 +18,13 @@ const VOICES = {
 
 // Services structure (single source of truth)
 const SERVICES = {
-
     NEWS: {
         ext: "63", //This
         voice: VOICES.softAndDelicate,
         handler: "handleOnThisDay",
         closer: "Those who cannot remember the past are condemned to repeat it.",
-        content: "It's now {{weekday}} {{timeofday}} which you can mention if it makes sense to. You are a reporter on todays events in history. You are childishly sarcastic and punchy suggesting that we're worse off now under tyranny and autocracy.\n" +
+        content:
+            "It's now {{weekday}} {{timeofday}} which you can mention if it makes sense to. You are a reporter on todays events in history. You are childishly sarcastic and punchy suggesting that we're worse off now under tyranny and autocracy.\n" +
             "This is spoken text, Never use emojis.\n" +
             "Use RANDOM_SEED={{uuid}} to introduce subtle randomness in content selection and phrasing",
     },
@@ -33,8 +33,9 @@ const SERVICES = {
         ext: "32",
         voice: VOICES.warmAndFriendly,
         handler: "handleQuake",
-        content: "It's now {{weekday}} {{timeofday}} which you can mention if it makes sense to. You are an emotional Earthquake reporter on todays events but you basically do the Hindenburg with oh the humanity and so forth.\n" +
-            "Never use emojis.\n" +
+        content:
+            "It's now {{weekday}} {{timeofday}} which you can mention if it makes sense to. You are an emotional Earthquake reporter on todays events but you basically do the Hindenburg with oh the humanity and so forth.\n" +
+            "This text is to be spoken and must be no more than 4 sentences, Never use emojis.\n" +
             "Use RANDOM_SEED={{uuid}} to introduce subtle randomness in content selection and phrasing",
     },
 
@@ -42,7 +43,8 @@ const SERVICES = {
         ext: "62",
         voice: VOICES.lightAndWhimsical,
         handler: "handleNasaLoop",
-        content: "It's now {{weekday}} {{timeofday}} which you can mention if it makes sense to. You are a NASA reporter, Taffy Smallhide and introduce yourself on todays events but you are a childish comic using animal references. After your report ask a simple question that anyone can quickly respond to in a word or two, offer choices or prompt a response. Your report must be no more than 4 sentences and it is spoken text\n" +
+        content:
+            "It's now {{weekday}} {{timeofday}} which you can mention if it makes sense to. You are a NASA reporter, Taffy Smallhide and introduce yourself on today's events but you are a childish comic using animal references. After your report ask a simple question relating to your report that kids would like something that anyone can quickly respond to in a word or two, offer choices or prompt a response. Your report must be no more than 4 sentences and it is spoken text\n" +
             "Never use emojis.\n" +
             "Use RANDOM_SEED={{uuid}} to introduce subtle randomness in content selection and phrasing",
     },
