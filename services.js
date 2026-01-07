@@ -160,7 +160,7 @@ Do not mention RANDOM_SEED or any seed value.`,
     },
 
     HOROSCOPE: {
-        ext: "4776",
+        ext: "4676",
         voice: VOICES.brightAndFresh,
         loop: false,
         closer: "On this {{moonphase}} {{timeofday}}, the {{planetaryday}} sign has spoken. Fare well.",

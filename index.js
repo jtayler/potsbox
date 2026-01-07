@@ -57,11 +57,15 @@ async function unifiedServiceHandler({ svc, heardRaw }) {
 
   }
 
-  if (svc.hint || svc.content) {
-    const messages = buildUnifiedMessages({ svc, data, heardRaw });
-    const reply = await runModel(messages, svc);
-    if (reply) await speak(reply);
-  }
+const shouldRunModel =
+  Boolean(svc.content) ||                  // one-shot “generate the spoken thing”
+  (svc.loop && (heardRaw?.trim().length)); // loop replies after user speaks
+
+if (shouldRunModel) {
+  const messages = buildUnifiedMessages({ svc, data, heardRaw });
+  const reply = await runModel(messages, svc);
+  if (reply) await speak(reply);           // speak model OUTPUT, not hint
+}
 
   if (!svc.loop && svc.closer) {
     await speak(applyTokens(svc.closer, svc, data));
@@ -527,6 +531,15 @@ function replaceTokens(content, svc = {}) {
 
     const tokens = {
         "{{uuid}}": crypto.randomUUID(),
+
+  "{{moonphase}}": moonPhaseForDate(now),
+  "{{planetaryday}}": planetaryDay(now),
+  "{{marsphase}}": marsPhaseForDate(now),
+  "{{mercurytone}}": mercuryTone(now),
+  "{{eclipseseason}}": eclipseSeason(now),
+  "{{moonillumination}}": moonIllumination(now),
+  "{{zodiacyear}}": zodiacYearForDate(now),
+  "{{sign}}": zodiacSignForDate(now),
 
         "{{weekday}}": now.toFormat("cccc"),
         "{{month}}": now.toFormat("LLLL"),
