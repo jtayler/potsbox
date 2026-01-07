@@ -19,7 +19,7 @@ const VOICES = {
 // Services structure (single source of truth)
 const SERVICES = {
     NEWS: {
-        ext: "63", //This
+        ext: "6397", //This
         voice: VOICES.softAndDelicate,
         handler: "handleOnThisDay",
         closer: "Those who cannot remember the past are condemned to repeat it.",
@@ -30,7 +30,7 @@ const SERVICES = {
     },
 
     EARTHQUAKE: {
-        ext: "32",
+        ext: "3278",
         voice: VOICES.warmAndFriendly,
         handler: "handleQuake",
         content:
@@ -40,7 +40,7 @@ const SERVICES = {
     },
 
     NASA: {
-        ext: "62",
+        ext: "6272",
         voice: VOICES.lightAndWhimsical,
         handler: "handleNasaLoop",
         content:
@@ -50,7 +50,7 @@ const SERVICES = {
     },
 
     SCIENCE: {
-        ext: "72",
+        ext: "7243",
         voice: VOICES.strongAndSteady,
         handler: "loopService",
         content: `
@@ -67,7 +67,7 @@ End each response with a short follow-up question so the caller knows to respond
     },
 
     COMPLAINTS: {
-        ext: "43",
+        ext: "4357",
         voice: VOICES.deepAndExpressive,
         handler: "loopService",
         opener: "{{greeting}} Help line — how may I serve you today?",
@@ -88,14 +88,14 @@ End each response with a short follow-up question so the caller knows to respond
     },
 
     TIME: {
-        ext: "84",
+        ext: "8463",
         voice: VOICES.poeticAndRhythmic,
         handler: "handleTime",
         content: "When you see a 0 you say OH 09:10 is said like oh-nine ten.\n",
     },
 
     WEATHER: {
-        ext: "93",
+        ext: "9328",
         voice: VOICES.calmAndWise,
         handler: "handleWeather",
         closer: "Thanks for listening to WRKO AM 680 on your dial.",
@@ -110,7 +110,7 @@ End each response with a short follow-up question so the caller knows to respond
     },
 
     JOKE: {
-        ext: "56",
+        ext: "5653",
         voice: VOICES.crispAndClean,
         closer: "Did you Get it? Pretty funny huh? Well -- That’s all folks!",
         handler: "service",
@@ -129,7 +129,7 @@ Do not mention RANDOM_SEED or any seed value.`,
     },
 
     PRAYER: {
-        ext: "46",
+        ext: "4637",
         voice: VOICES.deepAndEarthy,
         handler: "service",
         closer: "Remember folks, if you don't pray in my school, I won't think in your church.",
@@ -142,7 +142,7 @@ Do not mention RANDOM_SEED or any seed value.`,
     },
 
     HOROSCOPE: {
-        ext: "47",
+        ext: "4776",
         voice: VOICES.brightAndFresh,
         handler: "service",
         closer: "On this {{moonphase}} {{timeofday}}, the {{planetaryday}} sign has spoken. Fare well.",
@@ -157,7 +157,7 @@ Do not mention RANDOM_SEED or any seed value.`,
     },
 
     RIDDLE: {
-        ext: "74",
+        ext: "7433",
         handler: "loopService",
         voice: VOICES.softAndDelicate,
         temperature: 0.7,
@@ -175,7 +175,7 @@ Do not mention RANDOM_SEED or any seed value.`,
     },
 
     MYSTERY: {
-        ext: "69",
+        ext: "6978",
         handler: "loopService",
         voice: VOICES.lightAndWhimsical,
         temperature: 0.8,
@@ -192,7 +192,7 @@ Do not mention RANDOM_SEED or any seed value.`,
     },
 
     STORY: {
-        ext: "78",
+        ext: "7867",
         voice: VOICES.boldAndClear,
         closer: "That's all for {{timeofday}}, goodbye.",
         maxTokens: 220,
@@ -231,15 +231,17 @@ Do not mention RANDOM_SEED or any seed value.`,
             "- British-style politeness.\n" +
             "- 1–2 short sentences.\n\n" +
             "Response Examples:\n" +
-            "- Certainly. I’ll get right on that and connect you immediately. So sorry—it seems the connection is down in the {{timeofday}} at the moment.\n" +
-            "- I’m afraid on {{weekday}}'s we’re often fresh out of open lines to that region.\n" +
-            "- We never have connections there at the end of the week and the {{moonphase}} has been quite a bother I'm sure you know. We get them fresh on Monday.\n" +
-            "- This happens anytime we have a {{mercurytone}} condition I'm sure you understand.\n" +
-            "- Gosh, I knew it - every time we have a {{planetaryday}} Sign, this happens look {{marsphase}} quite unusual as you can rightly image.\n" +
-            "- Ah! No, out of open lines. It’s been on order for two weeks—was expecting it this {{timeofday}}.\n" +
-            "- So Sorry, this {{timeofday}} it seems the cat's eaten it. \n" +
+            "- Certainly. [repeat who they want] I’ll get right on that and connect you immediately. then after a bit --\n" +
+            "- Example things to say: \n" +
             "- Normally yes of course. Today the {{timeofday}} scheduled van broke down. Terribly sorry.\n" +
-            "Use RANDOM_SEED={{uuid}} to introduce different response examples and subtle randomness in content selection and phrasing.\n" +
+            "- This happens anytime we have a {{mercurytone}} condition I'm sure you understand.\n" +
+	    "- So sorry—it seems the connection is down in the {{timeofday}} at the moment.\n" +
+            "- So Sorry, this {{timeofday}} it seems the cat's eaten it. \n" +
+            "- I’m afraid on {{weekday}}'s we’re often fresh out of open lines to that region.\n" +
+            "- Ah! No, out of open lines. It’s been on order for two weeks—was expecting it this {{timeofday}}.\n" +
+            "- We never have connections there at the end of the week and the {{moonphase}} has been quite a bother I'm sure you know. We get them fresh on Monday.\n" +
+            "- Gosh, I knew it - every time we have a {{planetaryday}} Sign, this happens look {{marsphase}} quite unusual as you can rightly image.\n" +
+            "Use RANDOM_SEED={{uuid}} to introduce different Example things to say and subtle randomness in content selection and phrasing.\n" +
             "Do NOT mention the seed or randomness.\n",
     },
 };
