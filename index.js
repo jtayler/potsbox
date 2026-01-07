@@ -54,7 +54,6 @@ async function unifiedServiceHandler({ svc, heardRaw }) {
     call.greeted = true;
     await speak(applyTokens(svc.opener, svc, data));
     if (svc.loop) return "loop"; 
-
   }
 
 const shouldRunModel =
@@ -205,6 +204,8 @@ http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url.startsWith("/call/start")) {
         try {
             const { raw, exten, callId } = await initCallState({ req, channelVars: channelVars || {} });
+	    call.greeted = false;
+
             log("CALL START FROM:", exten);
 
             if (!callId) {
