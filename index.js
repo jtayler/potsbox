@@ -6,12 +6,12 @@ ami.connect("node", "nodepass", {
     host: "asterisk",
     port: 5038,
 })
-    .then(() => {
-        console.log("AMI connected as node");
-    })
-    .catch((err) => {
-        console.error("AMI connection failed", err);
-    });
+.then(() => {
+    console.log("AMI connected as node");
+})
+.catch((err) => {
+    console.error("AMI connection failed", err);
+});
 const SERVICES = require("./services");
 const http = require("http");
 const path = require("path");
@@ -21,182 +21,63 @@ const { exec, execSync } = require("child_process");
 const crypto = require("crypto");
 const HANGUP_RE = /\b(bye|goodbye|hang up|get off|gotta go|have to go|see you)\b/i;
 const url = require("url");
-const handlers = {
-    handleTime: async ({ svc }) => {
-        const time = call.now.toFormat("h:mm a");
-        const seconds = call.now.second;
-        await speak(`At the tone, the time will be ${time} and ${secondsToWords(seconds)}.`);
-        await speak("BEEEP!");
-        if (svc.closer) await speak(svc.closer);
-        return "exit";
-    },
-    handleWeather: async ({ svc }) => {
-        const report = await getWeatherReport();
-        if (!report)
-            return speak(
-                "I am sorry but the Weather service is temporarily unavailable, please try your call again later."
-            );
-        await speak(await narrateWeather(openai, report));
-        await speak("And always remember folks, if you don't like the weather, wait five minutes.");
-        if (svc.closer) await speak(svc.closer);
-        return "exit";
-    },
-    handleOpener: async (svc) => {
-        if (svc.opener) await speak(svc.opener);
-    },
 
-    handleNasaLoop: async ({ svc }) => {
-        const report = await getNASA();
-        if (!report) {
-            speak("NASA is temporarily unavailable. Please try again later.");
-            return "loop";
-        }
-        await speak(await narrateReport(openai, report));
-        if (svc.closer) await speak(svc.closer);
-        return "loop";
-    },
-
-    handleOnThisDay: async ({ svc }) => {
-        console.log("not his day called");
-        const report = await getOnThisDayReport(); // returns a short raw text blob
-        if (!report) return speak("I am sorry but On This Day is temporarily unavailable, please try again later.");
-
-        await speak(await narrateOnThisDay(openai, report));
-        if (svc.closer) await speak(svc.closer);
-        return "exit";
-    },
-
-    handleQuake: async ({ svc }) => {
-        const report = await getQuakeReport();
-        if (!report) return speak("I am sorry, the earthquake service is temporarily unavailable.");
-
-        await speak(await narrateReport(openai, report));
-        if (svc.closer) await speak(svc.closer);
-        return "exit";
-    },
-
-    service: async ({ svc }) => {
-        const reply = await handlers.runServiceLoop({ svc });
-        if (reply) await speak(reply);
-        if (svc.closer) await speak(svc.closer);
-        return "exit";
-    },
-    loopService: async ({ svc, user, context }) => {
-        const reply = await handlers.runServiceLoop({ svc, user: user ?? "", context });
-        if (reply) await speak(reply);
-        return "loop";
-    },
-    runServiceLoop,
-    handleLoopTurn: async (svc, heardRaw) => {
-        if (!svc?.handler) return "exit";
-        const decision = await handlers[svc.handler]({ svc, user: heardRaw });
-
-        if (decision !== "loop" && decision !== "exit") {
-            throw new Error(`Handler ${svc.handler} returned invalid: ${decision}`);
-        }
-        return decision;
-    },
+const capabilities = {
+    weather: require("./capabilities/weather"),
+    nasa: require("./capabilities/nasa"),
+    onthisday: require("./capabilities/onthisday"),
 };
 
-async function narrateReport(openai, raw) {
-    const svc = call.service;
+function applyTokens(text, svc, data = {}) {
+    let out = replaceTokens(text, svc); // existing time/zodiac/etc
 
+    for (const [k, v] of Object.entries(data)) {
+        out = out.replaceAll(`{{${k}}}`, String(v));
+    }
+    return out;
+}
+
+async function unifiedServiceHandler({ svc, heardRaw }) {
+  if (heardRaw && HANGUP_RE.test(heardRaw)) {
+    await speak("Alright. Goodbye.");
+    return "exit";
+  }
+
+  const data = {};
+  for (const cap of svc.requires || []) {
+    const mod = capabilities[cap];
+    if (!mod) throw new Error(`Missing capability: ${cap}`);
+    Object.assign(data, await mod.fetch({ call }));
+  }
+
+  if (!call.greeted && svc.opener) {
+    call.greeted = true;
+    await speak(applyTokens(svc.opener, svc, data));
+    if (svc.loop) return "loop"; 
+
+  }
+
+  if (svc.hint || svc.content) {
+    const messages = buildUnifiedMessages({ svc, data, heardRaw });
+    const reply = await runModel(messages, svc);
+    if (reply) await speak(reply);
+  }
+
+  if (!svc.loop && svc.closer) {
+    await speak(applyTokens(svc.closer, svc, data));
+    return "exit";
+  }
+
+  return svc.loop ? "loop" : "exit";
+}
+
+async function runModel(messages, svc) {
     const r = await openai.responses.create({
         model: "gpt-4o-mini",
-        temperature: 0.9,
-        max_output_tokens: 120,
-        input: [
-            {
-                role: "system",
-                content: svc.content,
-            },
-            { role: "user", content: raw },
-        ],
+        temperature: svc.temperature ?? 0.8,
+        max_output_tokens: svc.maxTokens ?? 120,
+        input: messages,
     });
-
-    return (r.output_text || "").trim();
-}
-
-async function getQuakeReport() {
-    const url = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson";
-
-    const j = await fetch(url).then((r) => r.json());
-    const f = (j.features || []).sort((a, b) => b.properties.mag - a.properties.mag)[0];
-
-    if (!f) return null;
-
-    return `Strongest earthquake today: magnitude ${f.properties.mag} near ${f.properties.place}.`;
-}
-
-async function getNASA() {
-    try {
-        const url = "https://eonet.gsfc.nasa.gov/api/v3/events?limit=1";
-        const j = await fetch(url).then((r) => r.json());
-        const e = j?.events?.[0];
-        if (!e) return null;
-
-        return `NASA reports a ${e.categories[0].title.toLowerCase()} event: ${e.title}.`;
-    } catch {
-        return null;
-    }
-}
-
-async function getOnThisDayReport(date = call.now) {
-    console.log("Get on this day report");
-    try {
-        const m = String(date.month).padStart(2, "0");
-        const d = String(date.day).padStart(2, "0");
-
-        const url = `https://en.wikipedia.org/api/rest_v1/feed/onthisday/events/${m}/${d}`;
-        const j = await fetch(url, { headers: { "User-Agent": "PotsBox/1.0 (on-this-day)" } }).then((r) => {
-            if (!r.ok) throw new Error(`WIKI_${r.status}`);
-            return r.json();
-        });
-
-        const events = (j?.events || []).filter((e) => e?.year && e?.text);
-        if (!events.length) return null;
-
-        // pick 2, prefer modern
-        const pool = events.filter((e) => e.year >= 1900);
-        const use = pool.length ? pool : events;
-
-        const pick = () => use[Math.floor(Math.random() * use.length)];
-        const clean = (s) =>
-            String(s || "")
-                .replace(/\s+/g, " ")
-                .replace(/\[[^\]]*\]/g, "")
-                .trim();
-
-        const a = pick();
-        let b = pick();
-        for (let i = 0; i < 10 && b === a; i++) b = pick();
-
-        const lines = [a, b]
-            .map((e) => `On this day in ${e.year}, ${clean(e.text)}`)
-            .map((s) => (s.length > 220 ? s.slice(0, 217) + "…" : s));
-
-        // raw “wire copy” for the model to read like a radio host
-        return `City: ${call.city}\nItems:\n- ${lines[0]}\n- ${lines[1]}`;
-    } catch {
-        return null;
-    }
-}
-
-async function narrateOnThisDay(openai, rawReport) {
-    const r = await openai.responses.create({
-        model: "gpt-4o-mini",
-        temperature: 0.8,
-        max_output_tokens: 140,
-        input: [
-            {
-                role: "system",
-                content:
-                    "You are a witty radio narrator. Read TWO short 'on this day' items. Keep it punchy, no citations, no links, no lists, no extra facts.",
-            },
-            { role: "user", content: rawReport },
-        ],
-    });
-
     return (r.output_text || "").trim();
 }
 
@@ -204,61 +85,51 @@ if (!process.env.OPENAI_API_KEY) {
     console.error("Missing OPENAI_API_KEY in environment.");
     process.exit(1);
 }
+
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
+
 const log = (...a) => console.log(call.now.toISO(), ...a);
 function serviceForExten(exten) {
     return Object.values(SERVICES).find((svc) => svc.ext === exten) || null;
 }
-async function getWeatherReport() {
-    const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(call.city)}&count=1&language=en&format=json`;
-    const geo = await fetch(geoUrl).then((r) => r.json());
-    const hit = geo?.results?.[0];
-    if (!hit) return null;
-    const { latitude, longitude, name, admin1, country } = hit;
-    const wxUrl =
-        `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}` +
-        `&current=temperature_2m,wind_speed_10m,precipitation,weather_code` +
-        `&temperature_unit=fahrenheit&wind_speed_unit=mph`;
-    const wx = await fetch(wxUrl).then((r) => r.json());
-    const cur = wx?.current;
-    if (!cur) return null;
-    // Super short “radio” read (no fake precision)
-    const place = [name, admin1, country].filter(Boolean).join(", ");
-    return `Weather for ${place}: ${Math.round(cur.temperature_2m)} degrees, wind ${Math.round(cur.wind_speed_10m)} miles an hour, precipitation ${cur.precipitation} inches right now.`;
-}
+
 const call = {
     id: crypto.randomUUID(),
     greeted: false,
     service: null,
 };
+
 let channelVars = {};
 function appendCtx(role, content) {
     // records each turn
     const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.jsonl`);
     fs.appendFileSync(ctxPath, JSON.stringify({ role, content }) + "\n");
 }
+
 async function initCallState({ req, channelVars = {} }) {
     console.log("starting call state setup");
 
     const { raw, exten, callId } = parseCallQuery(req);
-    console.log("raw is", raw);
+    console.log("initCallState ", raw);
 
     call.id = callId;
-    call.greeted = false;
+    //call.greeted = false;
     call._assistantEnded = false;
     call.city = channelVars.CALLER_CITY || "New York City";
     call.timezone = channelVars.CALLER_TZ || "America/New_York";
     call.now = DateTime.now().setZone(call.timezone || "America/New_York");
     return { raw, exten, callId };
 }
+
 function parseCallQuery(req) {
     const { query } = url.parse(req.url, true);
     const raw = (query.exten || "").trim();
     const [exten, callId] = raw.split("-", 2);
     return { query, raw, exten, callId };
 }
+
 http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url.startsWith("/call/dial")) {
         try {
@@ -289,6 +160,8 @@ http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url.startsWith("/call/reply")) {
         try {
             const { exten } = await initCallState({ req, channelVars });
+            log("CALL REPLY FROM:", exten);
+
             if (!call.service) call.service = serviceForExten(exten);
 
             const { wavInPath } = callFiles(call.id);
@@ -328,11 +201,12 @@ http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url.startsWith("/call/start")) {
         try {
             const { raw, exten, callId } = await initCallState({ req, channelVars: channelVars || {} });
+            log("CALL START FROM:", exten);
+
             if (!callId) {
                 res.end("exit");
                 return;
             }
-            log("CALL START FROM:", raw);
             const svc = exten === "0" ? SERVICES.OPERATOR : serviceForExten(exten);
             if (!svc) {
                 res.end("invalid");
@@ -341,7 +215,7 @@ http.createServer(async (req, res) => {
             call.service = svc;
             resetCallFiles(call.id);
             await startCall({ exten });
-            res.end(isLoopService(call.service) ? "loop" : "exit");
+            res.end(svc.loop ? "loop" : "exit");
         } catch (err) {
             console.error(err);
             res.statusCode = 500;
@@ -353,6 +227,7 @@ http.createServer(async (req, res) => {
 }).listen(3000, "0.0.0.0", () => {
     console.log("Listening on :3000");
 });
+
 function resetCallFiles(callId) {
     const base = path.join(__dirname, "asterisk-sounds", "en");
     const files = [
@@ -387,32 +262,12 @@ function resetCallFiles(callId) {
         }
     }
 }
+
 async function startCall({ exten }) {
     call.service = serviceForExten(exten);
-    const svc = call.service;
-    // Opener is terminal for this turn
-    if (svc.opener) {
-        await speak(replaceTokens(svc.opener, svc));
-        return;
-    }
-    // No opener → first model turn
-    if (isLoopService(svc)) {
-        await handlers[svc.handler]({ svc, user: "" });
-    } else {
-        const fn = handlers[svc.handler];
-        if (fn) await fn({ svc });
-    }
+    await unifiedServiceHandler({ svc: call.service, heardRaw: "" });
 }
-function buildMessages(svc) {
-    const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.jsonl`);
-    const messages = [{ role: "system", content: replaceTokens(svc.content, svc) }];
-    if (!fs.existsSync(ctxPath)) return messages;
-    const lines = fs.readFileSync(ctxPath, "utf8").split("\n").filter(Boolean);
-    for (const line of lines) {
-        messages.push(JSON.parse(line));
-    }
-    return messages;
-}
+
 function isTooQuiet(wavPath) {
     const volume = -30; // try -30, -28, -25
     try {
@@ -430,12 +285,15 @@ function isTooQuiet(wavPath) {
         return true;
     }
 }
+
 function cleanForSpeech(text) {
     return (text || "").replace(/^\s*operator:\s*/i, "").trim();
 }
+
 function assistantEndedCall(text) {
     return /\b(goodbye|good-bye|that’s all|thats all|farewell|hang up)\b/i.test(text);
 }
+
 function callFiles(callId) {
     const baseDir = path.join(__dirname, "asterisk-sounds", "en");
     return {
@@ -446,6 +304,7 @@ function callFiles(callId) {
         wavInPath: path.join(baseDir, `${callId}_in.wav`),
     };
 }
+
 async function speak(text) {
     if (text === "loop" || text === "exit") return;
     const svc = call.service;
@@ -496,6 +355,7 @@ async function speak(text) {
         console.error("Error in speak:", err);
     }
 }
+
 function originateCall({ exten }) {
     return ami.send({
         Action: "Originate",
@@ -504,6 +364,7 @@ function originateCall({ exten }) {
         Async: true,
     });
 }
+
 async function transferCall(exten) {
     return ami.send({
         Action: "Originate",
@@ -512,41 +373,17 @@ async function transferCall(exten) {
         Async: true,
     });
 }
+
 function serviceFromIntent(action) {
     if (!action?.startsWith("SERVICE_")) return null;
     const key = action.replace("SERVICE_", "");
     return SERVICES[key] || null;
 }
-async function operatorChat(heardRaw) {
-    console.log("Handling Operator Chat for:", heardRaw);
-    try {
-        const svc = call.service;
-        const messages = buildMessages(svc);
-        messages.push({ role: "user", content: heardRaw });
-        const r = await openai.responses.create({
-            model: "gpt-4o-mini",
-            temperature: 0.7,
-            max_output_tokens: 120,
-            input: messages,
-        });
-        const reply = (r.output_text || "").replace(/^operator:\s*/i, "").trim();
-        await speak(reply);
-    } catch (err) {
-        console.error("Error in operator chat:", err);
-    }
-}
 
 function secondsToWords(sec) {
     return `${sec} second${sec === 1 ? "" : "s"}`;
 }
-function seasonForDate(date = call.now) {
-    const m = date.month ?? DateTime.fromJSDate(date).month;
 
-    if (m === 12 || m === 1 || m === 2) return "Winter";
-    if (m >= 3 && m <= 5) return "Spring";
-    if (m >= 6 && m <= 8) return "Summer";
-    return "Fall";
-}
 function zodiacSignForDate(date = call.now) {
     const m = date.month; // 1–12
     const d = date.day;
@@ -564,6 +401,7 @@ function zodiacSignForDate(date = call.now) {
     if ((m === 1 && d >= 20) || (m === 2 && d <= 18)) return "Aquarius";
     return "Pisces";
 }
+
 async function transcribeFromFile(path) {
     const file = fs.createReadStream(path);
     const stt = await openai.audio.transcriptions.create({
@@ -572,6 +410,7 @@ async function transcribeFromFile(path) {
     });
     return (stt.text || "").replace(/[^\w\s,.!?-]/g, "").trim(); // Remove anything not a standard character
 }
+
 function moonPhaseForDate(dt = call.now) {
     const utc = dt.toUTC();
 
@@ -591,6 +430,7 @@ function moonPhaseForDate(dt = call.now) {
     if (phase < 23.99361) return "last quarter moon";
     return "waning crescent";
 }
+
 function marsPhaseForDate(dt = call.now) {
     const utc = dt.toUTC();
 
@@ -607,6 +447,7 @@ function marsPhaseForDate(dt = call.now) {
     if (phase < 450) return "approaching opposition";
     return "near opposition";
 }
+
 function moonIllumination(dt = call.now) {
     const utc = dt.toUTC();
 
@@ -619,6 +460,7 @@ function moonIllumination(dt = call.now) {
 
     return Math.round(50 * (1 - Math.cos((2 * Math.PI * phase) / synodic)));
 }
+
 function planetaryDay(dt = call.now) {
     // Luxon: weekday 1=Mon … 7=Sun
     return ["Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Sun"][dt.weekday - 1];
@@ -698,6 +540,8 @@ function replaceTokens(content, svc = {}) {
 
         "{{time}}": now.toFormat("h:mm a"),
         "{{timezone}}": now.zoneName,
+        "{{seconds}}": String(now.second),
+        "{{seconds_words}}": secondsToWords(now.second),
 
         "{{greeting}}": hour24 < 12 ? "Good morning" : hour24 < 17 ? "Good afternoon" : "Good evening",
 
@@ -724,38 +568,31 @@ function replaceTokens(content, svc = {}) {
     }
     return out;
 }
-async function narrateWeather(openai, rawReport) {
-    const svc = SERVICES.WEATHER;
-    const r = await openai.responses.create({
-        model: "gpt-4o-mini",
-        temperature: 0.9,
-        max_output_tokens: 140,
-        input: [
-            {
-                role: "system",
-                content: svc.content,
-            },
-            {
-                role: "user",
-                content: rawReport,
-            },
-        ],
-    });
-    return (r.output_text || "").trim();
+
+function buildUnifiedMessages({ svc, data, heardRaw }) {
+  const messages = [];
+
+  // system = hint (silent)
+  messages.push({ role: "system", content: applyTokens(svc.hint || svc.content || "", svc, data) });
+
+  // prior ctx (your existing ctx.jsonl)
+  const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.jsonl`);
+  if (fs.existsSync(ctxPath)) {
+    for (const line of fs.readFileSync(ctxPath, "utf8").split("\n")) {
+      if (line) messages.push(JSON.parse(line));
+    }
+  }
+
+  // user = content (one-shot) OR heardRaw (loop turn)
+  if (svc.content) {
+    messages.push({ role: "user", content: applyTokens(svc.content, svc, data) });
+  } else if (heardRaw) {
+    messages.push({ role: "user", content: heardRaw });
+  }
+
+  return messages;
 }
-async function runServiceLoop({ svc }) {
-    const messages = buildMessages(svc);
-    const r = await openai.responses.create({
-        model: "gpt-4o-mini",
-        temperature: svc.temperature ?? 0.8,
-        max_output_tokens: svc.maxTokens ?? 120,
-        input: messages,
-    });
-    return (r.output_text || "").trim();
-}
-function isLoopService(svc) {
-    return typeof svc.handler === "string" && svc.handler.includes("loop");
-}
+
 async function runCall(heardRaw) {
     const svc = call.service;
     if (!svc) return "exit";
@@ -765,13 +602,6 @@ async function runCall(heardRaw) {
         return "exit";
     }
 
-    // Let the handler speak and return "loop" or "exit"
-    const decision = await handlers.handleLoopTurn(svc, heardRaw);
-
-    // 🔒 HARD RULE: one-shot services can NEVER loop
-    if (!isLoopService(svc)) {
-        return "exit";
-    }
-
-    return decision; // loop services only
+const decision = await unifiedServiceHandler({ svc, heardRaw });
+return decision;
 }
