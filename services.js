@@ -44,7 +44,7 @@ EARTHQUAKE: {
 },
 
 NASA: {
-    ext: "6272",
+    ext: "99",
     voice: VOICES.lightAndWhimsical,
     loop: false,
     requires: ["nasa"],
@@ -55,7 +55,7 @@ NASA: {
         "Use RANDOM_SEED={{uuid}} but never mention it."
 },
 SPACE: {
-    ext: "99",
+    ext: "6272",
     voice: VOICES.lightAndWhimsical,
     loop: false,
     requires: ["space"],
