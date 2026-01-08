@@ -368,12 +368,15 @@ async function speak(text) {
 }
 
 function originateCall({ exten }) {
-    return ami.send({
-        Action: "Originate",
-        Channel: "Local/7243@ai-phone",
-        CallerID: "Science <7243>",
-        Async: true,
-    });
+  return ami.send({
+    Action: "Originate",
+    Channel: `Local/${exten}@ai-phone`,
+    Context: "ai-phone",
+    Exten: exten,
+    Priority: 1,
+    CallerID: `${exten}`,
+    Async: true,
+  });
 }
 
 async function transferCall(exten) {
@@ -383,6 +386,13 @@ async function transferCall(exten) {
         CallerID: `${exten}`,
         Async: true,
     });
+}
+
+async function reloadPJSIP() {
+  return ami.send({
+    Action: "Command",
+    Command: "pjsip reload",
+  });
 }
 
 function serviceFromIntent(action) {
