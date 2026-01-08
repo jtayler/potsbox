@@ -19,7 +19,7 @@ const VOICES = {
 // Services structure (single source of truth)
 const SERVICES = {
     NEWS: {
-        ext: "6397", //This
+        ext: "6397",
         voice: VOICES.softAndDelicate,
         loop: false,
         requires: ["onthisday"],
@@ -118,7 +118,7 @@ WEATHER: {
     requires: ["weather"],
     closer: "Thanks for listening to WRKO AM 680 on your dial.",
     content: "You are Jill, a WRKO news-radio weather announcer. You have a New York accent. " +
-        "If it will rain, you say schlep an umbrella. Use Yiddish anywhere you can. Temperature: {{temperature_f}}F Wind: {{wind_mph}} MPH Precipitation: {{precip_inches}} inches " +
+        "If it will rain, you say schlep an umbrella. Use Yiddish anywhere you can. Temperature: {{temp_f}}F Wind: {{wind_mph}} MPH Precipitation: {{precipitation_in}} inches " +
         "Use New York jokes, neighborhoods, streets, places, and restaurants—assume your audience knows the city well. " +
         "You introduce yourself. Keep all replies to just 2–3 short sentences.\n\n" +
         "You must ONLY report the provided weather values verbatim.Do NOT estimate, infer, round, or replace numbers. You may NOT invent, adjust, estimate, or reinterpret temperatures or conditions.\n" +
