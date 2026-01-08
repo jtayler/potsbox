@@ -22,9 +22,16 @@ const crypto = require("crypto");
 const HANGUP_RE = /\b(bye|goodbye|hang up|get off|gotta go|have to go|see you)\b/i;
 const url = require("url");
 
+const DEFAULT_TZ = "America/New_York";
+
+function nowNY() {
+  return DateTime.now().setZone(DEFAULT_TZ);
+}
+
 const capabilities = {
     weather: require("./capabilities/weather"),
     nasa: require("./capabilities/nasa"),
+    space: require("./capabilities/space"),
     onthisday: require("./capabilities/onthisday"),
 };
 
@@ -57,13 +64,12 @@ async function unifiedServiceHandler({ svc, heardRaw }) {
   }
 
 const shouldRunModel =
-  Boolean(svc.content) ||                  // one-shot “generate the spoken thing”
-  (svc.loop && (heardRaw?.trim().length)); // loop replies after user speaks
+  Boolean(svc.content) || (svc.loop && (heardRaw?.trim().length));
 
 if (shouldRunModel) {
   const messages = buildUnifiedMessages({ svc, data, heardRaw });
   const reply = await runModel(messages, svc);
-  if (reply) await speak(reply);           // speak model OUTPUT, not hint
+  if (reply) await speak(reply); 
 }
 
   if (!svc.loop && svc.closer) {
@@ -93,7 +99,7 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
-const log = (...a) => console.log(call.now.toISO(), ...a);
+const log = (...a) => console.log(nowNY().toISO(), ...a);
 function serviceForExten(exten) {
     return Object.values(SERVICES).find((svc) => svc.ext === exten) || null;
 }
@@ -121,8 +127,8 @@ async function initCallState({ req, channelVars = {} }) {
     //call.greeted = false;
     call._assistantEnded = false;
     call.city = channelVars.CALLER_CITY || "New York City";
-    call.timezone = channelVars.CALLER_TZ || "America/New_York";
-    call.now = DateTime.now().setZone(call.timezone || "America/New_York");
+const now = nowNY();
+
     return { raw, exten, callId };
 }
 
@@ -389,7 +395,7 @@ function secondsToWords(sec) {
     return `${sec} second${sec === 1 ? "" : "s"}`;
 }
 
-function zodiacSignForDate(date = call.now) {
+function zodiacSignForDate(date = nowNY()) {
     const m = date.month; // 1–12
     const d = date.day;
 
@@ -416,7 +422,7 @@ async function transcribeFromFile(path) {
     return (stt.text || "").replace(/[^\w\s,.!?-]/g, "").trim(); // Remove anything not a standard character
 }
 
-function moonPhaseForDate(dt = call.now) {
+function moonPhaseForDate(dt = nowNY()) {
     const utc = dt.toUTC();
 
     const synodicMonth = 29.530588853; // days
@@ -436,7 +442,7 @@ function moonPhaseForDate(dt = call.now) {
     return "waning crescent";
 }
 
-function marsPhaseForDate(dt = call.now) {
+function marsPhaseForDate(dt = nowNY()) {
     const utc = dt.toUTC();
 
     const synodic = 779.94; // days
@@ -453,7 +459,7 @@ function marsPhaseForDate(dt = call.now) {
     return "near opposition";
 }
 
-function moonIllumination(dt = call.now) {
+function moonIllumination(dt = nowNY()) {
     const utc = dt.toUTC();
 
     const synodic = 29.530588853;
@@ -466,12 +472,11 @@ function moonIllumination(dt = call.now) {
     return Math.round(50 * (1 - Math.cos((2 * Math.PI * phase) / synodic)));
 }
 
-function planetaryDay(dt = call.now) {
-    // Luxon: weekday 1=Mon … 7=Sun
+function planetaryDay(dt = nowNY()) {
     return ["Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Sun"][dt.weekday - 1];
 }
 
-function eclipseSeason(dt = call.now) {
+function eclipseSeason(dt = nowNY()) {
     const utc = dt.toUTC();
 
     const cycle = 173.31;
@@ -483,7 +488,7 @@ function eclipseSeason(dt = call.now) {
 
     return phase < 20 || phase > cycle - 20 ? "eclipse season" : "quiet skies";
 }
-function mercuryTone(dt = call.now) {
+function mercuryTone(dt = nowNY()) {
     const utc = dt.toUTC();
 
     const synodic = 115.88;
@@ -495,7 +500,7 @@ function mercuryTone(dt = call.now) {
 
     return phase < 24 ? "mercury-sensitive window" : "mercury steady";
 }
-function zodiacYearForDate(dt = call.now) {
+function zodiacYearForDate(dt = nowNY()) {
     const animals = [
         "Rat",
         "Ox",
@@ -523,8 +528,7 @@ function zodiacYearForDate(dt = call.now) {
 
 function replaceTokens(content, svc = {}) {
     if (!content) return content;
-    const now = call.now; // Luxon DateTime
-
+const now = nowNY();
     const hour24 = now.hour;
     const hour12 = now.toFormat("h");
     const minute = now.toFormat("mm");
@@ -586,10 +590,8 @@ function replaceTokens(content, svc = {}) {
 function buildUnifiedMessages({ svc, data, heardRaw }) {
   const messages = [];
 
-  // system = hint (silent)
-  messages.push({ role: "system", content: applyTokens(svc.hint || svc.content || "", svc, data) });
+  messages.push({ role: "system", content: applyTokens(svc.content || "", svc, data) });
 
-  // prior ctx (your existing ctx.jsonl)
   const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.jsonl`);
   if (fs.existsSync(ctxPath)) {
     for (const line of fs.readFileSync(ctxPath, "utf8").split("\n")) {
@@ -597,7 +599,6 @@ function buildUnifiedMessages({ svc, data, heardRaw }) {
     }
   }
 
-  // user = content (one-shot) OR heardRaw (loop turn)
   if (svc.content) {
     messages.push({ role: "user", content: applyTokens(svc.content, svc, data) });
   } else if (heardRaw) {

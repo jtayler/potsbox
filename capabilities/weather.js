@@ -6,7 +6,6 @@ async function fetchWeather({ call }) {
         `?name=${encodeURIComponent(call.city)}` +
         `&count=1&language=en&format=json`;
 
-console.log("fetch weather: ", geoUrl);
 
     const geo = await fetch(geoUrl).then(r => r.json());
     const hit = geo?.results?.[0];
@@ -19,6 +18,8 @@ console.log("fetch weather: ", geoUrl);
         `?latitude=${latitude}&longitude=${longitude}` +
         `&current=temperature_2m,wind_speed_10m,precipitation` +
         `&temperature_unit=fahrenheit&wind_speed_unit=mph`;
+
+console.log("fetch weather: ", wxUrl);
 
     const wx = await fetch(wxUrl).then(r => r.json());
     const cur = wx?.current;
