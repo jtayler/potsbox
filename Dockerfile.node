@@ -10,10 +10,11 @@ RUN npm ci  # or RUN npm install if not using package-lock.json
 
 # Install ffmpeg, luxon
 RUN apk add --no-cache ffmpeg
-RUN npm install luxon
 
 # Copy the rest of the application
 COPY . .
+
+RUN npm install luxon
 
 # Set the command to run the application
 CMD ["node", "index.js"]
