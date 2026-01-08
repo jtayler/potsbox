@@ -32,6 +32,7 @@ const capabilities = {
     weather: require("./capabilities/weather"),
     nasa: require("./capabilities/nasa"),
     space: require("./capabilities/space"),
+    complaint: require("./capabilities/complaint"),
     onthisday: require("./capabilities/onthisday"),
 };
 
