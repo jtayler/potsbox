@@ -2,16 +2,22 @@ const { DateTime } = require("luxon");
 
 const AmiClient = require("asterisk-ami-client");
 const ami = new AmiClient();
-ami.connect("node", "nodepass", {
-    host: "asterisk",
-    port: 5038,
-})
-.then(() => {
+
+const connectAMI = async () => {
+  try {
+    await ami.connect("node", "nodepass", {
+      host: "asterisk",
+      port: 5038,
+    });
     console.log("AMI connected as node");
-})
-.catch((err) => {
-    console.error("AMI connection failed", err);
-});
+  } catch (err) {
+    console.error("AMI connection failed, retrying...", err);
+    setTimeout(connectAMI, 5000); // Retry in 5 seconds
+  }
+};
+
+connectAMI();
+
 const SERVICES = require("./services");
 const http = require("http");
 const path = require("path");

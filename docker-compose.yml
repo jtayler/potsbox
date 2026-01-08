@@ -1,6 +1,18 @@
 version: "3.8"
 
 services:
+  nginx:
+    image: nginx:latest
+    container_name: nginx-proxy
+    ports:
+      - "443:443"
+      - "80:80"  # If you want to redirect HTTP to HTTPS
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro  # certs from the host
+      - ./nginx.conf:/etc/nginx/nginx.conf  # custom Nginx config (if any)
+    depends_on:
+      - node
+    
   asterisk:
     image: andrius/asterisk:latest
     container_name: asterisk
@@ -15,6 +27,7 @@ services:
     volumes:
       - ./asterisk-config:/etc/asterisk
       - ./asterisk-sounds:/var/lib/asterisk/sounds
+      - /etc/letsencrypt:/etc/letsencrypt:ro   # Mount Letsencrypt
 
   node:
     build:
@@ -28,5 +41,5 @@ services:
       - .:/app
     depends_on:
       - asterisk
-    environment:
-      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+    env_file:
+      - .env  # Point to the .env file containing the OpenAI API key

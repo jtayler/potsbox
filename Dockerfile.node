@@ -1,7 +1,18 @@
 FROM node:20-alpine
+
 WORKDIR /app
+
+# Copy package.json and package-lock.json first (to optimize Docker caching)
 COPY package*.json ./
+
+# Install dependencies, including Luxon if it's listed in package.json
+RUN npm ci  # or RUN npm install if not using package-lock.json
+
+# Install ffmpeg
 RUN apk add --no-cache ffmpeg
-RUN npm ci
+
+# Copy the rest of the application
 COPY . .
-CMD ["node","index.js"]
+
+# Set the command to run the application
+CMD ["node", "index.js"]
