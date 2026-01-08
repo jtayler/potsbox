@@ -6,15 +6,13 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies, including Luxon if it's listed in package.json
-RUN npm ci  # or RUN npm install if not using package-lock.json
+RUN npm ci
 
-# Install ffmpeg, luxon
+# Install ffmpeg
 RUN apk add --no-cache ffmpeg
 
 # Copy the rest of the application
 COPY . .
-
-RUN npm install luxon
 
 # Set the command to run the application
 CMD ["node", "index.js"]
