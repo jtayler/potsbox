@@ -33,6 +33,7 @@ const capabilities = {
     nasa: require("./capabilities/nasa"),
     space: require("./capabilities/space"),
     complaint: require("./capabilities/complaint"),
+    earthquake: require("./capabilities/earthquake"),
     onthisday: require("./capabilities/onthisday"),
 };
 
@@ -68,7 +69,12 @@ const shouldRunModel =
   Boolean(svc.content) || (svc.loop && (heardRaw?.trim().length));
 
 if (shouldRunModel) {
-  const messages = buildUnifiedMessages({ svc, data, heardRaw });
+  const randomSeed = `RANDOM_SEED=${crypto.randomUUID()}`;
+  const messages = buildUnifiedMessages({
+    svc,
+    data,
+    content: `Use ${randomSeed} to introduce subtle randomness in phrasing.\n` + heardRaw
+  });
   const reply = await runModel(messages, svc);
   if (reply) await speak(reply); 
 }
@@ -85,7 +91,7 @@ async function runModel(messages, svc) {
     const r = await openai.responses.create({
         model: "gpt-4o-mini",
         temperature: svc.temperature ?? 0.8,
-        max_output_tokens: svc.maxTokens ?? 120,
+        max_output_tokens: svc.maxTokens ?? 200,
         input: messages,
     });
     return (r.output_text || "").trim();
@@ -176,7 +182,7 @@ http.createServer(async (req, res) => {
 
             const { wavInPath } = callFiles(call.id);
             if (!waitForStableFile(wavInPath)) {
-                res.end("exit"); // Asterisk retry, not logic
+                res.end("exit");
                 return;
             }
 
@@ -195,10 +201,6 @@ http.createServer(async (req, res) => {
             } catch {}
 
             const decision = await runCall(heardRaw);
-
-            if (decision !== "loop" && decision !== "exit") {
-                throw new Error(`Invalid handler return: ${decision}`);
-            }
 
             res.end(decision);
         } catch (err) {
@@ -298,10 +300,6 @@ function isTooQuiet(wavPath) {
     }
 }
 
-function cleanForSpeech(text) {
-    return (text || "").replace(/^\s*operator:\s*/i, "").trim();
-}
-
 function assistantEndedCall(text) {
     return /\b(goodbye|good-bye|that’s all|thats all|farewell|hang up)\b/i.test(text);
 }
@@ -325,20 +323,15 @@ async function speak(text) {
 
     console.log(`[${call.id}] ${voiceName}:`, text);
 
-    const s = cleanForSpeech(text);
-    if (!s) {
-        console.log("Empty text passed to speak.");
-        return;
-    }
     const { wavPath, ulawPath } = callFiles(call.id);
-    appendCtx("assistant", s);
+    appendCtx("assistant", text);
     try {
         if (!svc?.voice) throw new Error("No voice for current service");
         const voice = svc.voice;
         const speech = await openai.audio.speech.create({
             model: "gpt-4o-mini-tts",
             voice: voice,
-            input: s,
+            input: text,
             format: "wav",
         });
         const wavChunk = Buffer.from(await speech.arrayBuffer());
@@ -357,7 +350,7 @@ async function speak(text) {
                 err ? reject(err) : resolve()
             );
         });
-        if (assistantEndedCall(s)) {
+        if (assistantEndedCall(text)) {
             const voice = svc.voice ? svc.voice.charAt(0).toUpperCase() + svc.voice.slice(1) : "Assistant";
 
             //console.log(`${voice}:`, "ENDED THE CALL");
@@ -539,7 +532,8 @@ function zodiacYearForDate(dt = nowNY()) {
 
 function replaceTokens(content, svc = {}) {
     if (!content) return content;
-const now = nowNY();
+
+    const now = nowNY();
     const hour24 = now.hour;
     const hour12 = now.toFormat("h");
     const minute = now.toFormat("mm");
@@ -548,14 +542,14 @@ const now = nowNY();
     const tokens = {
         "{{uuid}}": crypto.randomUUID(),
 
-  "{{moonphase}}": moonPhaseForDate(now),
-  "{{planetaryday}}": planetaryDay(now),
-  "{{marsphase}}": marsPhaseForDate(now),
-  "{{mercurytone}}": mercuryTone(now),
-  "{{eclipseseason}}": eclipseSeason(now),
-  "{{moonillumination}}": moonIllumination(now),
-  "{{zodiacyear}}": zodiacYearForDate(now),
-  "{{sign}}": zodiacSignForDate(now),
+        "{{moonphase}}": moonPhaseForDate(now),
+        "{{planetaryday}}": planetaryDay(now),
+        "{{marsphase}}": marsPhaseForDate(now),
+        "{{mercurytone}}": mercuryTone(now),
+        "{{eclipseseason}}": eclipseSeason(now),
+        "{{moonillumination}}": moonIllumination(now),
+        "{{zodiacyear}}": zodiacYearForDate(now),
+        "{{sign}}": zodiacSignForDate(now),
 
         "{{weekday}}": now.toFormat("cccc"),
         "{{month}}": now.toFormat("LLLL"),
@@ -628,6 +622,6 @@ async function runCall(heardRaw) {
         return "exit";
     }
 
-const decision = await unifiedServiceHandler({ svc, heardRaw });
-return decision;
+    const decision = await unifiedServiceHandler({ svc, heardRaw });
+    return decision;
 }
