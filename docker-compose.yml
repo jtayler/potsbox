@@ -39,7 +39,6 @@ services:
       - "3000:3000"
     volumes:
       - .:/app
-      - /app/node_modules  # <--- ADD THIS LINE
     depends_on:
       - asterisk
     env_file:
