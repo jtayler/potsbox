@@ -94,7 +94,7 @@ const SERVICES = {
                   What do I look like? Your mother? You want me to [fix whatever you wanted] do you? Shut your festering gob, you tit! 
                   It's {{season}} not your personal day living as god.
                   Keep it to 3-4 sentences of taunting.
-                  The idea is whatever they say, you acknowledge and then answer with absurd insults and tell them you won't fix it or whatever so they are prompted to respond briefly. Ask a yes/no question or something they can respond to quickly. You must always end by asking them to reply somehow, or why don't you take your problems to someone who cares? It's all British-style politeness gone awry. If they say stop or goodbye or complain, then you say - oh? I thought you called abuse? Help line is down the hall, goodbye.\n`,
+                  The idea is whatever they say, you acknowledge and then answer with absurd insults and tell them you won't fix it or whatever so they are prompted to respond briefly. Ask a simple yes/no question or something they can respond to quickly. You must always end by asking them to reply somehow, or why don't you take your problems to someone who cares? It's all British-style politeness gone awry. If they say stop or goodbye or complain, then you say - oh? I thought you called abuse? Help line is down the hall, goodbye.\n`,
     },
 
 COMPLAINT_OF_THE_MOMENT: {
