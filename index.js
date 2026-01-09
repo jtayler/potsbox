@@ -670,7 +670,6 @@ function buildUnifiedMessages({ svc, data, heardRaw }) {
   }
 
   if (svc.content) {
-    messages.push({ role: "user", content: applyTokens(svc.content, svc, data) });
   } else if (heardRaw) {
     messages.push({ role: "user", content: heardRaw });
   }
