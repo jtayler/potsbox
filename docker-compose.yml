@@ -37,6 +37,7 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+      - "3600:3600/tcp"
     depends_on:
       - asterisk
     env_file:
