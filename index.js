@@ -370,7 +370,7 @@ function assistantEndedCall(text) {
 }
 
 function callFiles(callId) {
-const baseDir = "/app/asterisk-sounds/en";
+    const baseDir = path.join(__dirname, "asterisk-sounds", "en");
     return {
         baseDir,
         ctx: path.join(baseDir, `${callId}.ctx.txt`),

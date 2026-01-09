@@ -38,6 +38,8 @@ services:
     ports:
       - "3000:3000"
       - "3600:3600/tcp"
+    volumes:
+      - ./asterisk-sounds:/app/asterisk-sounds
     depends_on:
       - asterisk
     env_file:
