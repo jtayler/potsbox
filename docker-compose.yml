@@ -38,7 +38,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - .:/app
+      # no volumes
     depends_on:
       - asterisk
     env_file:
