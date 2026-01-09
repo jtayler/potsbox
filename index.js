@@ -1,4 +1,7 @@
 const { DateTime } = require("luxon");
+const pool = require("./db/pool");
+const { ownerFromSipUser, findEndpoint } = require("./db/endpoints");
+require("dotenv").config();
 
 const AmiClient = require("asterisk-ami-client");
 const ami = new AmiClient();
@@ -16,7 +19,9 @@ const connectAMI = async () => {
   }
 };
 
-connectAMI();
+if (process.env.ENABLE_AMI !== "false") {
+  connectAMI();
+}
 
 const SERVICES = require("./services");
 const http = require("http");
@@ -112,6 +117,14 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
+
+async function serviceForDial({ endpoint, exten }) {
+  const ownerId = await ownerFromSipUser(endpoint);
+  if (!ownerId) return null;
+
+  return await findEndpoint({ ownerId, dialCode: exten });
+}
+
 const log = (...a) => console.log(nowNY().toISO(), ...a);
 function serviceForExten(exten) {
     return Object.values(SERVICES).find((svc) => svc.ext === exten) || null;
@@ -133,7 +146,7 @@ function appendCtx(role, content) {
 async function initCallState({ req, channelVars = {} }) {
     console.log("starting call state setup");
 
-    const { raw, exten, callId } = parseCallQuery(req);
+    const { raw, exten, callId, endpoint } = parseCallQuery(req);
     console.log("initCallState ", raw);
 
     call.id = callId;
@@ -142,14 +155,41 @@ async function initCallState({ req, channelVars = {} }) {
     call.city = channelVars.CALLER_CITY || "New York City";
 const now = nowNY();
 
-    return { raw, exten, callId };
+    return { raw, exten, callId, endpoint };
 }
 
 function parseCallQuery(req) {
     const { query } = url.parse(req.url, true);
     const raw = (query.exten || "").trim();
-    const [exten, callId] = raw.split("-", 2);
-    return { query, raw, exten, callId };
+  const parts = raw.split("-");
+  const exten = parts[0];
+  const callId = parts[1];
+  const endpoint = parts.slice(2).join("-");
+  return { query, raw, exten, callId, endpoint };
+}
+
+function normalizeEndpoint(row) {
+  return {
+    // identity
+    id: row.id,
+    type: row.type,
+    name: row.name,
+    note: row.note,
+
+    // behavior (match services.js)
+    ext: row.dial_code,
+    voice: row.voice,
+    loop: Boolean(row.is_loop),
+    requires: Array.isArray(row.requires) ? row.requires : [],
+
+    opener: row.opener || null,
+    closer: row.closer || null,
+    content: row.content || "",
+
+    // optional future
+    code: row.code || null,
+    kind: row.kind || null,
+  };
 }
 
 http.createServer(async (req, res) => {
@@ -217,31 +257,50 @@ http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && req.url.startsWith("/call/start")) {
-        try {
-            const { raw, exten, callId } = await initCallState({ req, channelVars: channelVars || {} });
-	    call.greeted = false;
+  try {
+    const { raw, exten, callId, endpoint } =
+      await initCallState({ req, channelVars: channelVars || {} });
 
-            log("CALL START FROM:", exten);
+    call.greeted = false;
+    log("CALL START FROM:", exten, endpoint);
 
-            if (!callId) {
-                res.end("exit");
-                return;
-            }
-            const svc = exten === "0" ? SERVICES.OPERATOR : serviceForExten(exten);
-            if (!svc) {
-                res.end("invalid");
-                return;
-            }
-            call.service = svc;
-            resetCallFiles(call.id);
-            await startCall({ exten });
-            res.end(svc.loop ? "loop" : "exit");
-        } catch (err) {
-            console.error(err);
-            res.statusCode = 500;
-            res.end("ERROR\n");
-        }
+    if (!callId) {
+      res.end("exit");
+      return;
     }
+
+    let svc;
+
+    if (exten === "0") {
+      svc = SERVICES.OPERATOR; // keep for now
+    } else {
+      const ep = await serviceForDial({ endpoint, exten });
+      if (!ep) {
+        res.end("invalid");
+        return;
+      }
+      svc = normalizeEndpoint(ep);
+    }
+
+    if (!svc) {
+      res.end("invalid");
+      return;
+    }
+
+    call.service = svc;
+    resetCallFiles(call.id);
+    await startCall({ exten });
+
+    res.end(svc.loop ? "loop" : "exit");
+    return; // IMPORTANT: stop before the 404 below
+  } catch (err) {
+    console.error(err);
+    res.statusCode = 500;
+    res.end("ERROR\n");
+    return;
+  }
+}
+
     res.statusCode = 404;
     res.end();
 }).listen(3000, "0.0.0.0", () => {
