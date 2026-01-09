@@ -33,14 +33,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.node
-    container_name: potsbox-node
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-      - "3600:3600/tcp"
-    volumes:
-      - ./asterisk-sounds:/app/asterisk-sounds
-    depends_on:
-      - asterisk
-    env_file:
-      - .env  # Point to the .env file containing the OpenAI API key
+      container_name: potsbox-node
+      restart: unless-stopped
+      ports:
+        - "3000:3000"
+        - "3600:3600/tcp"
+      volumes:
+        - ./asterisk-sounds:/app/asterisk-sounds
+      depends_on:
+        - asterisk
+      env_file:
+        - .env  # Point to the .env file containing the OpenAI API key
