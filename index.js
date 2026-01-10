@@ -75,18 +75,17 @@ async function unifiedServiceHandler({ svc, heardRaw }) {
     if (svc.loop) return "loop"; 
   }
 
-const shouldRunModel =
-  Boolean(svc.content) || (svc.loop && (heardRaw?.trim().length));
+const shouldRunModel = heardRaw?.trim().length;
 
 if (shouldRunModel) {
   const randomSeed = `RANDOM_SEED=${crypto.randomUUID()}`;
-const messages = buildUnifiedMessages({
-  svc,
-  data,
-  heardRaw: `Use ${randomSeed} to introduce subtle randomness in phrasing.\n` + heardRaw
-});
+  const messages = buildUnifiedMessages({
+    svc,
+    data,
+    heardRaw: `Use ${randomSeed} to introduce subtle randomness in phrasing.\n` + heardRaw
+  });
   const reply = await runModel(messages, svc);
-  if (reply) await speak(reply); 
+  if (reply) await speak(reply);
 }
 
   if (!svc.loop && svc.closer) {
