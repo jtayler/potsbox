@@ -26,12 +26,15 @@ async function fetchWeather({ call }) {
 
     console.log("weather: ", cur);
 
+console.log("WEATHER RAW:", wx);
+console.log("WEATHER CURRENT:", cur);
+
     return {
-        place: [name, admin1, country].filter(Boolean).join(", "),
-        temp_f: Math.round(cur.temperature_2m),
-        wind_mph: Math.round(cur.wind_speed_10m),
-        precipitation_in: cur.precipitation,
-        humidity: cur.relative_humidity_2m
+  place: [name, admin1, country].filter(Boolean).join(", "),
+  temp_f: Math.round((cur.temperature_2m * 9) / 5 + 32),
+  wind_mph: Math.round(cur.wind_speed_10m * 0.621371),
+  precipitation_in: +(cur.precipitation / 25.4).toFixed(2),
+  humidity: cur.relative_humidity_2m
     };
 }
 
