@@ -86,7 +86,7 @@ async function unifiedServiceHandler({ svc, heardRaw }) {
     if (svc.loop) return "loop"; 
   }
 
-const shouldRunModel = heardRaw?.trim().length;
+const shouldRunModel = heardRaw && heardRaw.trim().length > 3;
 
 if (shouldRunModel) {
   const randomSeed = `RANDOM_SEED=${crypto.randomUUID()}`;
