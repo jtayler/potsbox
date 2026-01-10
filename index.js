@@ -56,7 +56,18 @@ function applyTokens(text, svc, data = {}) {
     return out;
 }
 
+function resetOutputAudio(callId) {
+  const { wavPath, ulawPath } = callFiles(callId);
+  try {
+    if (fs.existsSync(wavPath)) fs.unlinkSync(wavPath);
+    if (fs.existsSync(ulawPath)) fs.unlinkSync(ulawPath);
+  } catch {}
+}
+
 async function unifiedServiceHandler({ svc, heardRaw }) {
+
+  resetOutputAudio(call.id);
+
   if (heardRaw && HANGUP_RE.test(heardRaw)) {
     await speak("Alright. Goodbye.");
     return "exit";
@@ -377,7 +388,8 @@ function callFiles(callId) {
 }
 
 async function speak(text) {
-    if (text === "loop" || text === "exit") return;
+console.log("SPEAK", text);
+
     const svc = call.service;
     text = replaceTokens(text, svc);
     const voiceName = svc.voice ? svc.voice.charAt(0).toUpperCase() + svc.voice.slice(1) : "Assistant";
@@ -650,7 +662,9 @@ function replaceTokens(content, svc = {}) {
 function buildUnifiedMessages({ svc, data, heardRaw }) {
   const messages = [];
 
-  messages.push({ role: "system", content: applyTokens(svc.content || "", svc, data) });
+  if (svc.content) {
+    messages.push({ role: "system", content: applyTokens(svc.content, svc, data) });
+  }
 
   const ctxPath = path.join(__dirname, "asterisk-sounds", "en", `${call.id}.ctx.jsonl`);
   if (fs.existsSync(ctxPath)) {
@@ -659,8 +673,7 @@ function buildUnifiedMessages({ svc, data, heardRaw }) {
     }
   }
 
-  if (svc.content) {
-  } else if (heardRaw) {
+  if (heardRaw?.trim()) {
     messages.push({ role: "user", content: heardRaw });
   }
 
