@@ -193,7 +193,7 @@ function normalizeEndpoint(row) {
 }
 
 http.createServer(async (req, res) => {
-    if (req.method === "POST" && req.url.startsWith("/call/dial")) {
+    if (req.method === "GET" && req.url.startsWith("/call/dial")) {
         try {
             const { exten } = await initCallState({ req, channelVars: {} });
             if (!exten) {
@@ -219,7 +219,7 @@ http.createServer(async (req, res) => {
         }
         return false;
     }
-    if (req.method === "POST" && req.url.startsWith("/call/reply")) {
+    if (req.method === "GET" && req.url.startsWith("/call/reply")) {
         try {
             const { exten } = await initCallState({ req, channelVars });
             log("CALL REPLY FROM:", exten);
@@ -256,7 +256,8 @@ http.createServer(async (req, res) => {
         }
     }
 
-    if (req.method === "POST" && req.url.startsWith("/call/start")) {
+    if (req.method === "GET" && req.url.startsWith("/call/start")) {
+    
   try {
     const { raw, exten, callId, endpoint } =
       await initCallState({ req, channelVars: channelVars || {} });
