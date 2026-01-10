@@ -69,8 +69,8 @@ async function unifiedServiceHandler({ svc, heardRaw }) {
     Object.assign(data, await mod.fetch({ call }));
   }
 
-  if (!call.greeted && svc.opener) {
-    call.greeted = true;
+if (call.greeted !== call.id && svc.opener) {
+  call.greeted = call.id;
     await speak(applyTokens(svc.opener, svc, data));
     if (svc.loop) return "loop"; 
   }
@@ -128,7 +128,7 @@ const log = (...a) => console.log(nowNY().toISO(), ...a);
 
 const call = {
     id: crypto.randomUUID(),
-    greeted: false,
+    greeted: null,
     service: null,
 };
 
@@ -262,7 +262,7 @@ if (!call.service) {
     const { raw, exten, callId, endpoint } =
       await initCallState({ req, channelVars: channelVars || {} });
 
-    call.greeted = false;
+    //call.greeted = false;
     log("CALL START FROM:", exten, endpoint);
 
     if (!callId) {
@@ -286,8 +286,6 @@ if (!call.service) {
 
     call.service = svc;
     resetCallFiles(call.id);
-    call.greeted = true;
-
     await startCall();
 
     res.end(svc.loop ? "loop" : "exit");
