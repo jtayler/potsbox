@@ -65,6 +65,12 @@ function resetOutputAudio(callId) {
 }
 
 async function unifiedServiceHandler({ svc, heardRaw }) {
+console.log("ENTER unifiedServiceHandler", {
+  callId: call.id,
+  heardRaw,
+  from: heardRaw ? "reply" : "start"
+});
+
   if (heardRaw && HANGUP_RE.test(heardRaw)) {
     await speak("Alright. Goodbye.");
     return "exit";
@@ -77,14 +83,13 @@ async function unifiedServiceHandler({ svc, heardRaw }) {
     Object.assign(data, await mod.fetch({ call }));
   }
 
-if (!call._openerStarted && svc.opener) {
-  call._openerStarted = true;   // MUST be before await
-  await speak(applyTokens(svc.opener, svc, data));
-  if (svc.loop) return "loop";
-}
+  if (!call.greeted && svc.opener) {
+    call.greeted = true;
+    await speak(applyTokens(svc.opener, svc, data));
+    if (svc.loop) return "loop"; 
+  }
 
-const shouldRunModel =
-  Boolean(svc.content) || (svc.loop && (heardRaw?.trim().length));
+const shouldRunModel = Boolean(svc.content);
 
 if (shouldRunModel) {
   const messages = buildUnifiedMessages({ svc, data, heardRaw });
@@ -167,13 +172,6 @@ function parseCallQuery(req) {
 }
 
 function normalizeEndpoint(row) {
-console.error("LOADED ENDPOINT:", {
-  dial: call.service.ext,
-  loop: call.service.loop,
-  opener: call.service.opener,
-  content: call.service.content,
-  closer: call.service.closer,
-});
 
   return {
     // identity
@@ -287,6 +285,15 @@ if (!call.service) {
         return;
       }
       svc = normalizeEndpoint(ep);
+
+console.error("LOADED ENDPOINT:", {
+  dial: svc.ext,
+  loop: svc.loop,
+  opener: svc.opener,
+  content: svc.content,
+  closer: svc.closer,
+});
+
 
     if (!svc) {
       res.end("invalid");
