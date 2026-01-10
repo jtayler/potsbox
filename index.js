@@ -286,6 +286,8 @@ if (!call.service) {
 
     call.service = svc;
     resetCallFiles(call.id);
+    call.greeted = true;
+
     await startCall();
 
     res.end(svc.loop ? "loop" : "exit");
