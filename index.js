@@ -23,7 +23,6 @@ if (process.env.ENABLE_AMI !== "false") {
   connectAMI();
 }
 
-const SERVICES = require("./services");
 const http = require("http");
 const path = require("path");
 const fs = require("fs");
@@ -81,11 +80,11 @@ const shouldRunModel =
 
 if (shouldRunModel) {
   const randomSeed = `RANDOM_SEED=${crypto.randomUUID()}`;
-  const messages = buildUnifiedMessages({
-    svc,
-    data,
-    content: `Use ${randomSeed} to introduce subtle randomness in phrasing.\n` + heardRaw
-  });
+const messages = buildUnifiedMessages({
+  svc,
+  data,
+  heardRaw: `Use ${randomSeed} to introduce subtle randomness in phrasing.\n` + heardRaw
+});
   const reply = await runModel(messages, svc);
   if (reply) await speak(reply); 
 }
@@ -126,9 +125,6 @@ async function serviceForDial({ endpoint, exten }) {
 }
 
 const log = (...a) => console.log(nowNY().toISO(), ...a);
-function serviceForExten(exten) {
-    return Object.values(SERVICES).find((svc) => svc.ext === exten) || null;
-}
 
 const call = {
     id: crypto.randomUUID(),
@@ -176,7 +172,6 @@ function normalizeEndpoint(row) {
     name: row.name,
     note: row.note,
 
-    // behavior (match services.js)
     ext: row.dial_code,
     voice: row.voice,
     loop: Boolean(row.is_loop),
@@ -224,7 +219,12 @@ http.createServer(async (req, res) => {
             const { exten } = await initCallState({ req, channelVars });
             log("CALL REPLY FROM:", exten);
 
-            if (!call.service) call.service = serviceForExten(exten);
+if (!call.service) {
+  const { endpoint } = parseCallQuery(req);
+  const ep = await serviceForDial({ endpoint, exten });
+  if (!ep) { res.end("invalid"); return; }
+  call.service = normalizeEndpoint(ep);
+}
 
             const { wavInPath } = callFiles(call.id);
             if (!waitForStableFile(wavInPath)) {
@@ -272,16 +272,12 @@ http.createServer(async (req, res) => {
 
     let svc;
 
-    if (exten === "0") {
-      svc = SERVICES.OPERATOR; // keep for now
-    } else {
       const ep = await serviceForDial({ endpoint, exten });
       if (!ep) {
         res.end("invalid");
         return;
       }
       svc = normalizeEndpoint(ep);
-    }
 
     if (!svc) {
       res.end("invalid");
@@ -290,7 +286,7 @@ http.createServer(async (req, res) => {
 
     call.service = svc;
     resetCallFiles(call.id);
-    await startCall({ exten });
+    await startCall();
 
     res.end(svc.loop ? "loop" : "exit");
     return; // IMPORTANT: stop before the 404 below
@@ -343,8 +339,8 @@ function resetCallFiles(callId) {
     }
 }
 
-async function startCall({ exten }) {
-    call.service = serviceForExten(exten);
+async function startCall() {
+  if (!call.service) return;
     await unifiedServiceHandler({ svc: call.service, heardRaw: "" });
 }
 
@@ -453,12 +449,6 @@ async function reloadPJSIP() {
     Action: "Command",
     Command: "pjsip reload",
   });
-}
-
-function serviceFromIntent(action) {
-    if (!action?.startsWith("SERVICE_")) return null;
-    const key = action.replace("SERVICE_", "");
-    return SERVICES[key] || null;
 }
 
 function secondsToWords(sec) {
