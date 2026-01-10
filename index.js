@@ -65,17 +65,11 @@ function resetOutputAudio(callId) {
 }
 
 async function unifiedServiceHandler({ svc, heardRaw }) {
-
-  // New turn → fresh output buffer
-  resetOutputAudio(call.id);
-
-  // Hard hangup
   if (heardRaw && HANGUP_RE.test(heardRaw)) {
     await speak("Alright. Goodbye.");
     return "exit";
   }
 
-  // Gather capability data
   const data = {};
   for (const cap of svc.requires || []) {
     const mod = capabilities[cap];
@@ -83,37 +77,21 @@ async function unifiedServiceHandler({ svc, heardRaw }) {
     Object.assign(data, await mod.fetch({ call }));
   }
 
-  // File-based opener guard (authoritative)
-  const ctxPath = path.join(
-    __dirname,
-    "asterisk-sounds",
-    "en",
-    `${call.id}.ctx.jsonl`
-  );
-  const alreadySpoke = fs.existsSync(ctxPath);
+if (!call._openerStarted && svc.opener) {
+  call._openerStarted = true;   // MUST be before await
+  await speak(applyTokens(svc.opener, svc, data));
+  if (svc.loop) return "loop";
+}
 
-  // Opener: exactly once per callId
-  if (!alreadySpoke && svc.opener) {
-    await speak(applyTokens(svc.opener, svc, data));
-    if (svc.loop) return "loop";
-  }
+const shouldRunModel =
+  Boolean(svc.content) || (svc.loop && (heardRaw?.trim().length));
 
-  // Model only for loop + real speech
-  const shouldRunModel =
-    svc.loop && heardRaw && heardRaw.trim().length > 3;
+if (shouldRunModel) {
+  const messages = buildUnifiedMessages({ svc, data, heardRaw });
+  const reply = await runModel(messages, svc);
+  if (reply) await speak(reply); 
+}
 
-  if (shouldRunModel) {
-    const randomSeed = `RANDOM_SEED=${crypto.randomUUID()}`;
-    const messages = buildUnifiedMessages({
-      svc,
-      data,
-      heardRaw: `Use ${randomSeed} to introduce subtle randomness in phrasing.\n${heardRaw}`,
-    });
-    const reply = await runModel(messages, svc);
-    if (reply) await speak(reply);
-  }
-
-  // Closer: non-loop services only
   if (!svc.loop && svc.closer) {
     await speak(applyTokens(svc.closer, svc, data));
     return "exit";
