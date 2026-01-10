@@ -86,18 +86,7 @@ async function unifiedServiceHandler({ svc, heardRaw }) {
     if (svc.loop) return "loop"; 
   }
 
-const shouldRunModel = svc.loop && heardRaw && heardRaw.trim().length > 3;
-
-if (shouldRunModel) {
-  const randomSeed = `RANDOM_SEED=${crypto.randomUUID()}`;
-  const messages = buildUnifiedMessages({
-    svc,
-    data,
-    heardRaw: `Use ${randomSeed} to introduce subtle randomness in phrasing.\n` + heardRaw
-  });
-  const reply = await runModel(messages, svc);
-  if (reply) await speak(reply);
-}
+// used to be here.
 
   if (!svc.loop && svc.closer) {
     await speak(applyTokens(svc.closer, svc, data));
