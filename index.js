@@ -7,13 +7,17 @@ require("dotenv").config();
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "editor", "views"));
 
-app.disable("strict routing");
+app.set("strict routing", false);
 
 app.get("/__up", (req, res) => res.status(200).send("OK"));
 
 app.get("/__editor_probe", (req, res) => res.send("editor probe ok"));
 
 // 2. Middleware (MUST come before routes)
+app.use((req, res, next) => {
+  console.log("EXPRESS SAW:", req.method, req.url);
+  next();
+});
 app.use(express.json()); // for parsing JSON data
 app.use(express.urlencoded({ extended: true })); // for parsing form data
 app.use("/editor/static", express.static("editor/public"));
