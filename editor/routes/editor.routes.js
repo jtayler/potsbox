@@ -2,10 +2,6 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../../db/pool"); // adjust if needed
 
-router.get("", (req, res) => {
-  return res.redirect("/editor/");
-});
-
 // GET /editor - List of lines and services
 router.get("/", async (req, res) => {
   try {
