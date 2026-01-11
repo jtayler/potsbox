@@ -91,10 +91,18 @@ router.get("/service/:id", async (req, res) => {
 
 // POST /editor/service/:id - Update service
 router.post("/service/:id", async (req, res) => {
-  const { name, note, dial_code, voice, requires, opener, closer } = req.body;
-  
-  // Convert the 'requires' string to a valid JSON array
-  const requiresJson = JSON.stringify(requires.split(',').filter(Boolean)); // Filter to remove empty strings
+  let { name, note, dial_code, voice, requires, opener, closer } = req.body;
+
+  // Transform 'requires' properly
+  let bodRequires = req.body.requires;
+  if (bodRequires === 'none' || !bodRequires) {
+    requires = []; // If 'none' or undefined, make it an empty array
+  } else {
+    requires = [bodRequires]; // Otherwise, wrap it in an array
+  }
+
+  // Convert 'requires' array to JSON string
+  const requiresJson = JSON.stringify(requires);
 
   try {
     await pool.execute(
