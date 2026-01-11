@@ -30,17 +30,17 @@
 
     <!-- Dial Code, Voice, and Requires in a Single Line -->
     <div class="row mb-3">
-      <div class="col-md-4">
+      <div class="col-md-3">
         <label for="dial_code" class="form-label">Dial Code</label>
         <input type="text" class="form-control" id="dial_code" name="dial_code" value="<%= service.dial_code %>" required>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-3">
         <label for="voice" class="form-label">Voice</label>
         <select class="form-control" id="voice" name="voice">
 <option value="nova" <%= service.voice === 'nova' ? 'selected' : '' %>>Nova</option><option value="sierra" <%= service.voice === 'sierra' ? 'selected' : '' %>>Sierra</option><option value="fable" <%= service.voice === 'fable' ? 'selected' : '' %>>Fable</option><option value="coral" <%= service.voice === 'coral' ? 'selected' : '' %>>Coral</option><option value="ballad" <%= service.voice === 'ballad' ? 'selected' : '' %>>Ballad</option><option value="ash" <%= service.voice === 'ash' ? 'selected' : '' %>>Ash</option><option value="echo" <%= service.voice === 'echo' ? 'selected' : '' %>>Echo</option><option value="shimmer" <%= service.voice === 'shimmer' ? 'selected' : '' %>>Shimmer</option><option value="sage" <%= service.voice === 'sage' ? 'selected' : '' %>>Sage</option><option value="onyx" <%= service.voice === 'onyx' ? 'selected' : '' %>>Onyx</option><option value="nova" <%= service.voice === 'nova' ? 'selected' : '' %>>Nova</option>
         </select>
       </div>
-      <div class="col-md-4">
+      <div class="col-md-3">
         <label for="requires" class="form-label">Requires</label>
         <select class="form-control" id="requires" name="requires">
 <option value="none" <%= service.requires.includes('none') ? 'selected' : '' %>>None</option>
@@ -50,6 +50,23 @@
 <option value="complaint" <%= service.requires.includes('complaint') ? 'selected' : '' %>>Complaint</option>
         </select>
       </div>
+      <div class="col-md-3">
+        <label for="is_loop" class="form-label">Reply Loop</label>
+<div class="m-2 form-check">
+  <input
+    class="form-check-input"
+    type="checkbox"
+    id="is_loop"
+    name="is_loop"
+    value="<%= service.is_loop %>"
+    <%= service.is_loop ? 'checked' : '' %>
+  >
+  <label class="form-check-label" for="is_loop">
+    Allow Responses
+  </label>
+</div>
+      </div>
+
     </div>
 
     <!-- Opener Field -->

@@ -7,7 +7,7 @@ router.get("/", async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `
-      SELECT id, type, name, dial_code, note
+      SELECT id, type, name, dial_code, note, is_loop, voice
       FROM endpoints
       WHERE owner_id = ?
       ORDER BY type, name
@@ -46,25 +46,60 @@ router.get("/line/:id", async (req, res) => {
 });
 
 // POST /editor/line/:id - Update line
-router.post("/line/:id", async (req, res) => {
-  console.log(req.body);  // Log the body to check if it contains the data you need
-  const { name, dial_code, note } = req.body; // Extract the form fields
-  
+router.post("/service/:id", async (req, res) => {
+  const body = req.body;
+
+  const name      = body.name ?? null;
+  const note      = body.note ?? null;
+  const dial_code = body.dial_code ?? null;
+  const voice     = body.voice ?? null;
+  const opener    = body.opener ?? null;
+  const closer    = body.closer ?? null;
+
+  const is_loop = body.is_loop ? 1 : 0;
+
+  // requires normalization
+  let requiresArr;
+  if (!body.requires || body.requires === "none") {
+    requiresArr = [];
+  } else {
+    requiresArr = [body.requires];
+  }
+
+  const requiresJson = JSON.stringify(requiresArr);
+
   try {
-    // Update the line in the database
     await pool.execute(
       `
       UPDATE endpoints
-      SET name = ?, note = ?, dial_code = ?
+      SET
+        name = ?,
+        note = ?,
+        dial_code = ?,
+        voice = ?,
+        requires = ?,
+        is_loop = ?,
+        opener = ?,
+        closer = ?
       WHERE id = ?
       `,
-      [name, note, dial_code, req.params.id] // Use `id` from the URL params
+      [
+        name,
+        note,
+        dial_code,
+        voice,
+        requiresJson,
+        is_loop,
+        opener,
+        closer,
+        req.params.id
+      ]
     );
 
-    res.redirect("/editor"); // Redirect to the editor page after saving
+    res.redirect("/editor");
   } catch (err) {
-    console.error("Error updating line:", err);
-    res.status(500).send("Error updating line");
+    console.error("Error updating service:", err);
+    res.status(500).send("Error updating service");
   }
 });
 
@@ -91,7 +126,16 @@ router.get("/service/:id", async (req, res) => {
 
 // POST /editor/service/:id - Update service
 router.post("/service/:id", async (req, res) => {
-  let { name, note, dial_code, voice, requires, opener, closer } = req.body;
+let {
+  name,
+  note = null,
+  dial_code = null,
+  voice = null,
+  requires,
+  opener = null,
+  closer = null
+} = req.body;
+  const is_loop = req.body.is_loop ? 1 : 0;
 
   // Transform 'requires' properly
   let bodRequires = req.body.requires;
@@ -106,13 +150,31 @@ router.post("/service/:id", async (req, res) => {
 
   try {
     await pool.execute(
-      `
-      UPDATE endpoints
-      SET name = ?, note = ?, dial_code = ?, voice = ?, requires = ?, opener = ?, closer = ?
-      WHERE id = ?
-      `,
-      [name, note, dial_code, voice, requiresJson, opener, closer, req.params.id]
-    );
+  `
+  UPDATE endpoints
+  SET
+    name = ?,
+    note = ?,
+    dial_code = ?,
+    voice = ?,
+    requires = ?,
+    is_loop = ?,
+    opener = ?,
+    closer = ?
+  WHERE id = ?
+  `,
+  [
+    name,
+    note,
+    dial_code,
+    voice,
+    requiresJson,
+    is_loop,
+    opener,
+    closer,
+    req.params.id
+  ]
+);
 
     res.redirect("/editor"); // Redirect back to the editor page
   } catch (err) {

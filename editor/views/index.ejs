@@ -27,7 +27,7 @@
               <strong><%= line.dial_code || '(no extension)' %> <%= line.name || '(unnamed line)' %></strong>
             </a>
 <br>
-            <small><%= line.note || '(no note)' %></small>
+            <%= line.note || '(no note)' %>
 </p>
           </li>
         <% }) %>
@@ -38,14 +38,25 @@
     <div class="col-md-6">
       <h3>Services</h3>
       <ul class="list-group">
-        <% services.forEach(service => { %>
-          <li class="list-group-item pb-4">
-           <a href="/editor/service/<%= service.id %>" class="btn-link"> <strong><%= service.dial_code || '(no dial code)' %> <%= service.name || '(unnamed service)' %></strong></a>
+<% services.forEach(service => { %>
+  <li class="list-group-item pb-3">
+    <a href="/editor/service/<%= service.id %>" class="btn-link">
+      <strong>
+        <%= service.dial_code || '(no dial code)' %>
+        <%= service.name || '(unnamed service)' %>
+      </strong>
+    </a>
+    <br>
+    <%= service.note || '(no note)' %> Spoken by <strong><%= service.voice ? service.voice.charAt(0).toUpperCase() + service.voice.slice(1) : 'Default' %></strong>
+
 <br>
-            <small><%= service.note || '(no note)' %></small><br>
-            
-          </li>
-        <% }) %>
+
+<% if (service.is_loop) { %>
+  <em class="text-success">This service replies to responses</em><br>
+<% } %>
+
+  </li>
+<% }) %>
       </ul>
     </div>
   </div>
