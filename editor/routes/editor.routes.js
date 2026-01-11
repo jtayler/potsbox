@@ -10,7 +10,7 @@ router.get("/", async (req, res) => {
       SELECT id, type, name, dial_code, note, is_loop, voice
       FROM endpoints
       WHERE owner_id = ?
-      ORDER BY type, name
+      ORDER BY type, updated_at DESC
       `,
       [1] // your user ID
     );
@@ -45,64 +45,6 @@ router.get("/line/:id", async (req, res) => {
   }
 });
 
-// POST /editor/line/:id - Update line
-router.post("/service/:id", async (req, res) => {
-  const body = req.body;
-
-  const name      = body.name ?? null;
-  const note      = body.note ?? null;
-  const dial_code = body.dial_code ?? null;
-  const voice     = body.voice ?? null;
-  const opener    = body.opener ?? null;
-  const closer    = body.closer ?? null;
-
-  const is_loop = body.is_loop ? 1 : 0;
-
-  // requires normalization
-  let requiresArr;
-  if (!body.requires || body.requires === "none") {
-    requiresArr = [];
-  } else {
-    requiresArr = [body.requires];
-  }
-
-  const requiresJson = JSON.stringify(requiresArr);
-
-  try {
-    await pool.execute(
-      `
-      UPDATE endpoints
-      SET
-        name = ?,
-        note = ?,
-        dial_code = ?,
-        voice = ?,
-        requires = ?,
-        is_loop = ?,
-        opener = ?,
-        closer = ?
-      WHERE id = ?
-      `,
-      [
-        name,
-        note,
-        dial_code,
-        voice,
-        requiresJson,
-        is_loop,
-        opener,
-        closer,
-        req.params.id
-      ]
-    );
-
-    res.redirect("/editor");
-  } catch (err) {
-    console.error("Error updating service:", err);
-    res.status(500).send("Error updating service");
-  }
-});
-
 // GET /editor/service/:id - Service editor form
 router.get("/service/:id", async (req, res) => {
   console.log(req.body);  // Log the body to check if it contains the data you need
@@ -133,6 +75,7 @@ let {
   voice = null,
   requires,
   opener = null,
+  content = null,
   closer = null
 } = req.body;
   const is_loop = req.body.is_loop ? 1 : 0;
@@ -160,6 +103,7 @@ let {
     requires = ?,
     is_loop = ?,
     opener = ?,
+    content = ?,
     closer = ?
   WHERE id = ?
   `,
@@ -171,6 +115,7 @@ let {
     requiresJson,
     is_loop,
     opener,
+    content,
     closer,
     req.params.id
   ]
