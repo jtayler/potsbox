@@ -40,11 +40,11 @@
       <div class="col-md-4">
         <label for="requires" class="form-label">Requires</label>
         <select class="form-control" id="requires" name="requires">
-          <option value="none" <%= service.requires === 'none' ? 'selected' : '' %>>None</option>
-          <option value="weather" <%= service.requires === 'weather' ? 'selected' : '' %>>Weather</option>
-          <option value="nasa" <%= service.requires === 'nasa' ? 'selected' : '' %>>NASA</option>
-          <option value="earthquake" <%= service.requires === 'earthquake' ? 'selected' : '' %>>Earthquake</option>
-          <option value="complaint" <%= service.requires === 'complaint' ? 'selected' : '' %>>Complaint</option>
+<option value="none" <%= service.requires.includes('none') ? 'selected' : '' %>>None</option>
+<option value="weather" <%= service.requires.includes('weather') ? 'selected' : '' %>>Weather</option>
+<option value="nasa" <%= service.requires.includes('nasa') ? 'selected' : '' %>>NASA</option>
+<option value="earthquake" <%= service.requires.includes('earthquake') ? 'selected' : '' %>>Earthquake</option>
+<option value="complaint" <%= service.requires.includes('complaint') ? 'selected' : '' %>>Complaint</option>
         </select>
       </div>
     </div>
