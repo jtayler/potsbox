@@ -32,7 +32,7 @@
   <a href="/editor/line/<%= line.id %>" class="stretched-link text-reset text-decoration-none">
     <p class="mb-2">
       <strong class="text-primary">
-        <%= line.dial_code || '(no extension)' %>
+        <%= line.dial_code || '(no extension)' %> •
         <%= line.name || '(unnamed line)' %>
       </strong><br>
       <%= line.note || '(no note)' %>
@@ -54,7 +54,7 @@
       class="stretched-link text-reset text-decoration-none"
     >
       <strong class="text-primary">
-        <%= service.dial_code || '(no dial code)' %>
+        <%= service.dial_code || '(no dial code)' %> •
         <%= service.name || '(unnamed service)' %>
       </strong>
     </a>

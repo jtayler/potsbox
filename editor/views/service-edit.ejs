@@ -12,6 +12,159 @@
 <body class="bg-light">
 
 
+<div id="tokenBar" class="m-0 d-none  p-1 bg-white"></div>
+
+<script>
+let activeField = null;
+
+const baseTokens = [
+  // misc
+  "greeting",
+
+  // time / date
+  "season",
+  "timeofday",
+  "weekday",
+  "year",
+  "month",
+  "day",
+  "hour",
+  "minute",
+
+  // astronomy
+  "moonphase",
+  "planetaryday",
+
+];
+
+const requiresTokens = {
+  weather: [
+    "weather_temperature",
+    "weather_condition",
+    "weather_high",
+    "weather_low"
+  ],
+  nasa: [
+    "nasa_event",
+    "nasa_date"
+  ],
+  earthquake: [
+    "earthquake_magnitude",
+    "earthquake_location"
+  ],
+  complaint: [
+    "complaint_type",
+    "complaint_summary"
+  ]
+};
+
+function getRequiresTokens() {
+  const sel = document.getElementById("requires");
+  if (!sel) return [];
+  const val = sel.value;
+  if (!val || val === "none") return [];
+  return requiresTokens[val] || [];
+}
+
+function humanize(key) {
+  return key.replace(/_/g, " ")
+            .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function insertToken(token) {
+  if (!activeField) return;
+
+  const text = `{{${token}}}`;
+  const start = activeField.selectionStart;
+  const end = activeField.selectionEnd;
+  const value = activeField.value;
+
+  activeField.value =
+    value.slice(0, start) + text + value.slice(end);
+
+  const pos = start + text.length;
+  activeField.setSelectionRange(pos, pos);
+  activeField.focus();
+}
+
+function renderTokens(required, base) {
+  const bar = document.getElementById("tokenBar");
+  bar.innerHTML = "";
+  bar.classList.remove("d-none");
+
+  const makeToken = (token, color) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `btn btn-sm btn-outline-${color} rounded-pill px-2 py-0 me-1 mb-1`;
+    btn.style.fontSize = "0.75rem";
+    btn.textContent = humanize(token);
+
+    btn.addEventListener("mousedown", e => {
+      e.preventDefault();
+      insertToken(token);
+    });
+
+    bar.appendChild(btn);
+  };
+
+  required.forEach(t => makeToken(t, "primary"));
+  base.forEach(t => makeToken(t, "info"));
+}
+
+function makeToken(token, color) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = `btn btn-sm btn-outline-${color} rounded-pill px-2 py-0 me-1 mb-1`;
+  btn.style.fontSize = "0.75rem";
+  btn.textContent = humanize(token);
+
+  btn.addEventListener("mousedown", e => {
+    e.preventDefault();
+    insertToken(token);
+  });
+
+  tokenBar.appendChild(btn);
+}
+
+// Focus handling
+document.addEventListener("DOMContentLoaded", () => {
+document.querySelectorAll("input, textarea").forEach(el => {
+  el.addEventListener("focus", () => {
+    activeField = el;
+
+const wrapper = el.closest(".mb-3");
+if (wrapper) {
+  wrapper.insertBefore(tokenBar, el);
+}
+
+    tokenBar.classList.remove("d-none");
+renderTokens(getRequiresTokens(), baseTokens);
+  });
+});
+
+  document.getElementById("requires")?.addEventListener("change", () => {
+    if (!activeField) return;
+renderTokens(getRequiresTokens(), baseTokens);
+  });
+});
+
+document.addEventListener("mousedown", e => {
+  const bar = document.getElementById("tokenBar");
+
+  if (
+    bar.contains(e.target) ||
+    e.target.tagName === "INPUT" ||
+    e.target.tagName === "TEXTAREA"
+  ) {
+    return;
+  }
+
+  bar.classList.add("d-none");
+  activeField = null;
+});
+
+</script>
+
 <div class="container py-4 col-8">
 <div class="card shadow-sm">
 <div class="card-header p-4">
