@@ -16,6 +16,7 @@ const requiresTokens = {
   weather: ["weather_temperature","weather_condition","weather_high","weather_low"],
   nasa: ["nasa_event","nasa_date"],
   earthquake: ["earthquake_magnitude","earthquake_location"],
+  history: [ "history_items" ],
   complaint: ["complaint_type","complaint_summary"]
 };
 
@@ -144,6 +145,9 @@ Edit Service: <%= service.name %></h1>
         <select class="form-control" id="requires" name="requires">
 <option value="none" <%= service.requires.includes('none') ? 'selected' : '' %>>None</option>
 <option value="weather" <%= service.requires.includes('weather') ? 'selected' : '' %>>Weather</option>
+<option value="history" <%= service.requires.includes('history') ? 'selected' : '' %>>
+  On This Day
+</option>
 <option value="nasa" <%= service.requires.includes('nasa') ? 'selected' : '' %>>NASA</option>
 <option value="earthquake" <%= service.requires.includes('earthquake') ? 'selected' : '' %>>Earthquake</option>
 <option value="complaint" <%= service.requires.includes('complaint') ? 'selected' : '' %>>Complaint</option>
