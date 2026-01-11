@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Edit Service - PotsBox</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container py-4">
+  <h1 class="mb-4">Edit Service: <%= service.name %></h1>
+
+  <form method="POST" action="/editor/service/<%= service.id %>">
+    <!-- Name and Note Fields -->
+    <div class="mb-3">
+      <label for="name" class="form-label">Service Name</label>
+      <input type="text" class="form-control" id="name" name="name" value="<%= service.name %>" required>
+    </div>
+
+    <div class="mb-3">
+      <label for="note" class="form-label">Note</label>
+      <input class="form-control" id="note" name="note" value="<%= service.note %>">
+    </div>
+
+    <!-- Dial Code, Voice, and Requires in a Single Line -->
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label for="dial_code" class="form-label">Dial Code</label>
+        <input type="text" class="form-control" id="dial_code" name="dial_code" value="<%= service.dial_code %>" required>
+      </div>
+      <div class="col-md-4">
+        <label for="voice" class="form-label">Voice</label>
+        <select class="form-control" id="voice" name="voice">
+<option value="nova" <%= service.voice === 'nova' ? 'selected' : '' %>>Nova</option><option value="sierra" <%= service.voice === 'sierra' ? 'selected' : '' %>>Sierra</option><option value="fable" <%= service.voice === 'fable' ? 'selected' : '' %>>Fable</option><option value="coral" <%= service.voice === 'coral' ? 'selected' : '' %>>Coral</option><option value="ballad" <%= service.voice === 'ballad' ? 'selected' : '' %>>Ballad</option><option value="ash" <%= service.voice === 'ash' ? 'selected' : '' %>>Ash</option><option value="echo" <%= service.voice === 'echo' ? 'selected' : '' %>>Echo</option><option value="shimmer" <%= service.voice === 'shimmer' ? 'selected' : '' %>>Shimmer</option><option value="sage" <%= service.voice === 'sage' ? 'selected' : '' %>>Sage</option><option value="onyx" <%= service.voice === 'onyx' ? 'selected' : '' %>>Onyx</option><option value="nova" <%= service.voice === 'nova' ? 'selected' : '' %>>Nova</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label for="requires" class="form-label">Requires</label>
+        <select class="form-control" id="requires" name="requires">
+          <option value="none" <%= service.requires === 'none' ? 'selected' : '' %>>None</option>
+          <option value="weather" <%= service.requires === 'weather' ? 'selected' : '' %>>Weather</option>
+          <option value="nasa" <%= service.requires === 'nasa' ? 'selected' : '' %>>NASA</option>
+          <option value="earthquake" <%= service.requires === 'earthquake' ? 'selected' : '' %>>Earthquake</option>
+          <option value="complaint" <%= service.requires === 'complaint' ? 'selected' : '' %>>Complaint</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Opener Field -->
+    <div class="mb-3">
+      <label for="opener" class="form-label">Opener</label>
+      <input class="form-control" id="opener" name="opener" value="<%= service.opener %>">
+    </div>
+
+    <!-- Content Field -->
+    <div class="mb-3">
+      <label for="content" class="form-label">Content</label>
+      <textarea class="form-control" id="content" name="content" rows="7"><%= service.content %></textarea>
+    </div>
+
+    <!-- Closer Field -->
+    <div class="mb-3">
+      <label for="closer" class="form-label">Closer</label>
+      <input class="form-control" id="closer" name="closer" value="<%= service.closer %>">
+    </div>
+<button type="button" class="btn btn-secondary" onclick="window.location.href='/editor';">Cancel</button>
+
+    <button type="submit" class="btn btn-primary">Save Changes</button>
+  </form>
+</div>
+
+</body>
+</html>

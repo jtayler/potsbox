@@ -1,7 +1,25 @@
+const express = require("express");
+const app = express();
+const path = require("path");
+require("dotenv").config();
+
+// 1. Settings
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "editor", "views"));
+
+// 2. Middleware (MUST come before routes)
+app.use(express.json()); // for parsing JSON data
+app.use(express.urlencoded({ extended: true })); // for parsing form data
+app.use("/editor/static", express.static("editor/public"));
+
+// 3. Routes
+const editorRoutes = require("./editor/routes/editor.routes");
+app.use("/editor", editorRoutes);
+
+// 4. External Services & Database
 const { DateTime } = require("luxon");
 const pool = require("./db/pool");
 const { ownerFromSipUser, findEndpoint } = require("./db/endpoints");
-require("dotenv").config();
 
 const AmiClient = require("asterisk-ami-client");
 const ami = new AmiClient();
@@ -24,7 +42,6 @@ if (process.env.ENABLE_AMI !== "false") {
 }
 
 const http = require("http");
-const path = require("path");
 const fs = require("fs");
 const OpenAI = require("openai");
 const { exec, execSync } = require("child_process");
@@ -196,6 +213,9 @@ function normalizeEndpoint(row) {
 }
 
 http.createServer(async (req, res) => {
+  if (!req.url.startsWith("/call/")) {
+    return app(req, res);
+  }
     if (req.method === "GET" && req.url.startsWith("/call/dial")) {
         try {
             const { exten } = await initCallState({ req, channelVars: {} });
