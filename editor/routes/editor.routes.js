@@ -2,17 +2,36 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../../db/pool"); // adjust if needed
 
+// --- helper: letters -> phone digits (Q, Z excluded)
+function toDialDigits(input = "") {
+  const map = {
+    A:2,B:2,C:2,
+    D:3,E:3,F:3,
+    G:4,H:4,I:4,
+    J:5,K:5,L:5,
+    M:6,N:6,O:6,
+    P:7,R:7,S:7,
+    T:8,U:8,V:8,
+    W:9,X:9,Y:9,
+  };
+
+  return input
+    .toUpperCase()
+    .replace(/[^A-Y0-9]/g, "")
+    .replace(/[A-Y]/g, ch => map[ch]);
+}
+
 // GET /editor - List of lines and services
 router.get("/", async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `
-      SELECT id, type, name, dial_code, note, is_loop, voice
+      SELECT *
       FROM endpoints
       WHERE owner_id = ?
       ORDER BY type, updated_at DESC
       `,
-      [1] // your user ID
+      [1]
     );
 
     const lines = rows.filter(r => r.type === "line");
@@ -25,7 +44,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /editor/line/:id - Update line
+// POST /editor/line/:id - Update line (UNCHANGED)
 router.post("/line/:id", async (req, res) => {
   const { name, dial_code, note } = req.body;
 
@@ -49,7 +68,7 @@ router.post("/line/:id", async (req, res) => {
   }
 });
 
-// GET /editor/line/:id - Line editor form
+// GET /editor/line/:id
 router.get("/line/:id", async (req, res) => {
   try {
     const [rows] = await pool.execute(
@@ -57,95 +76,93 @@ router.get("/line/:id", async (req, res) => {
       [req.params.id]
     );
 
-    if (rows.length === 0) {
-      return res.status(404).send("Line not found");
-    }
+    if (!rows.length) return res.status(404).send("Line not found");
 
-    const line = rows[0];
-    res.render("line-edit", { line });
+    res.render("line-edit", { line: rows[0] });
   } catch (err) {
     console.error("Error loading line edit form:", err);
     res.status(500).send("Error loading line form");
   }
 });
 
-// GET /editor/service/:id - Service editor form
+// GET /editor/service/:id
 router.get("/service/:id", async (req, res) => {
-  console.log(req.body);  // Log the body to check if it contains the data you need
   try {
     const [rows] = await pool.execute(
       `SELECT * FROM endpoints WHERE id = ?`,
       [req.params.id]
     );
 
-    if (rows.length === 0) {
-      return res.status(404).send("Service not found");
-    }
+    if (!rows.length) return res.status(404).send("Service not found");
 
-    const service = rows[0];
-    res.render("service-edit", { service });
+    res.render("service-edit", { service: rows[0] });
   } catch (err) {
     console.error("Error loading service edit form:", err);
     res.status(500).send("Error loading service form");
   }
 });
 
-// POST /editor/service/:id - Update service
+// POST /editor/service/:id - Update service (UPDATED)
 router.post("/service/:id", async (req, res) => {
-let {
-  name,
-  note = null,
-  dial_code = null,
-  voice = null,
-  requires,
-  opener = null,
-  content = null,
-  closer = null
-} = req.body;
+  let {
+    name,
+    note = null,
+    dial_code = null,
+    dial_alias = null,
+    voice = null,
+    opener = null,
+    content = null,
+    closer = null
+  } = req.body;
+
   const is_loop = req.body.is_loop ? 1 : 0;
 
-  // Transform 'requires' properly
-  let bodRequires = req.body.requires;
-  if (bodRequires === 'none' || !bodRequires) {
-    requires = []; // If 'none' or undefined, make it an empty array
-  } else {
-    requires = [bodRequires]; // Otherwise, wrap it in an array
+  // --- requires: always store JSON array
+  let requiresArr = [];
+  if (req.body.requires && req.body.requires !== "none") {
+    requiresArr = Array.isArray(req.body.requires)
+      ? req.body.requires
+      : [req.body.requires];
   }
+  const requiresJson = JSON.stringify(requiresArr);
 
-  // Convert 'requires' array to JSON string
-  const requiresJson = JSON.stringify(requires);
+  // --- alias -> digits (services only)
+  const alias = dial_alias ? dial_alias.toUpperCase() : null;
+  const finalDialCode = alias ? toDialDigits(alias) : dial_code;
 
   try {
     await pool.execute(
-  `
-  UPDATE endpoints
-  SET
-    name = ?,
-    note = ?,
-    dial_code = ?,
-    voice = ?,
-    requires = ?,
-    is_loop = ?,
-    opener = ?,
-    content = ?,
-    closer = ?
-  WHERE id = ?
-  `,
-  [
-    name,
-    note,
-    dial_code,
-    voice,
-    requiresJson,
-    is_loop,
-    opener,
-    content,
-    closer,
-    req.params.id
-  ]
-);
+      `
+      UPDATE endpoints
+      SET
+        name = ?,
+        note = ?,
+        dial_code = ?,
+        dial_alias = ?,
+        voice = ?,
+        requires = ?,
+        is_loop = ?,
+        opener = ?,
+        content = ?,
+        closer = ?
+      WHERE id = ?
+      `,
+      [
+        name,
+        note,
+        finalDialCode,
+        alias,
+        voice,
+        requiresJson,
+        is_loop,
+        opener,
+        content,
+        closer,
+        req.params.id
+      ]
+    );
 
-    res.redirect("/editor"); // Redirect back to the editor page
+    res.redirect("/editor");
   } catch (err) {
     console.error("Error updating service:", err);
     res.status(500).send("Error updating service");
