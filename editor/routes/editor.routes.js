@@ -25,6 +25,30 @@ router.get("/", async (req, res) => {
   }
 });
 
+// POST /editor/line/:id - Update line
+router.post("/line/:id", async (req, res) => {
+  const { name, dial_code, note } = req.body;
+
+  try {
+    await pool.execute(
+      `
+      UPDATE endpoints
+      SET
+        name = ?,
+        dial_code = ?,
+        note = ?
+      WHERE id = ?
+      `,
+      [name, dial_code, note, req.params.id]
+    );
+
+    res.redirect("/editor");
+  } catch (err) {
+    console.error("Error updating line:", err);
+    res.status(500).send("Error updating line");
+  }
+});
+
 // GET /editor/line/:id - Line editor form
 router.get("/line/:id", async (req, res) => {
   try {
