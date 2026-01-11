@@ -337,8 +337,9 @@ console.error("LOADED ENDPOINT:", {
     res.statusCode = 404;
     res.end();
 }).listen(3000, "0.0.0.0", () => {
-    console.log("Listening on :3000");
+  console.log("Server running on 0.0.0.0:3000");
 });
+
 
 function resetCallFiles(callId) {
     const base = path.join(__dirname, "asterisk-sounds", "en");
